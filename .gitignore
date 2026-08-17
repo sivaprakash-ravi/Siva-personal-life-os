@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Personal Life OS local data
+*.db
+*.sqlite
+*.sqlite3
