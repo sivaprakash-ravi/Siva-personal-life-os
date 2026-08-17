@@ -1,5 +1,8 @@
+from app.config import APP_ENV
+
+
 def main():
-    print("Personal Life OS is starting...")
+    print(f"Personal Life OS is running in: {APP_ENV}")
 
 
 if __name__ == "__main__":
