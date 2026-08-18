@@ -31,3 +31,27 @@ def calculate_today_completion_rate():
     today_check_ins = get_today_checkins(today)
 
     return calculate_completion_rate(today_check_ins)
+
+
+def get_daily_summary():
+    """
+    Return today's daily check-in summary.
+    """
+    today = date.today().isoformat()
+    today_check_ins = get_today_checkins(today)
+
+    total = len(today_check_ins)
+    completed = sum(
+        1
+        for check_in in today_check_ins
+        if check_in[5] == "completed"
+    )
+    pending = total - completed
+
+    return {
+        "date": today,
+        "total": total,
+        "completed": completed,
+        "pending": pending,
+        "completion_rate": calculate_completion_rate(today_check_ins),
+    }
