@@ -1,15 +1,14 @@
 from datetime import date
 
 from app.services.checkin_service import get_today_checkins
+from app.services.missed_checkin import get_missed_checkins
 
 
 def calculate_completion_rate(check_ins):
     """
-    Calculate the completion rate from a list of check-in records.
+    Calculate completion percentage.
 
-    Completion rate = completed check-ins / total check-ins * 100.
-
-    Returns 0.0 when there are no check-ins.
+    Completed check-ins / total check-ins * 100.
     """
     if not check_ins:
         return 0.0
@@ -23,35 +22,56 @@ def calculate_completion_rate(check_ins):
     return round((completed_count / len(check_ins)) * 100, 2)
 
 
-def calculate_today_completion_rate():
+def get_daily_summary(summary_date=None):
     """
-    Calculate today's check-in completion rate.
+    Return a summary for a specific date.
     """
-    today = date.today().isoformat()
-    today_check_ins = get_today_checkins(today)
+    if summary_date is None:
+        summary_date = date.today()
 
-    return calculate_completion_rate(today_check_ins)
+    date_value = summary_date.isoformat()
 
+    check_ins = get_today_checkins(date_value)
 
-def get_daily_summary():
-    """
-    Return today's daily check-in summary.
-    """
-    today = date.today().isoformat()
-    today_check_ins = get_today_checkins(today)
+    missed_check_ins = get_missed_checkins(
+        check_ins,
+        __import__("datetime").datetime.now().time(),
+    )
 
-    total = len(today_check_ins)
+    missed_ids = {check_in[0] for check_in in missed_check_ins}
+
     completed = sum(
         1
-        for check_in in today_check_ins
+        for check_in in check_ins
         if check_in[5] == "completed"
     )
-    pending = total - completed
+
+    missed = sum(
+        1
+        for check_in in check_ins
+        if check_in[0] in missed_ids or check_in[5] == "missed"
+    )
+
+    pending = sum(
+        1
+        for check_in in check_ins
+        if check_in[5] == "pending" and check_in[0] not in missed_ids
+    )
 
     return {
-        "date": today,
-        "total": total,
+        "date": date_value,
+        "total": len(check_ins),
         "completed": completed,
         "pending": pending,
-        "completion_rate": calculate_completion_rate(today_check_ins),
+        "missed": missed,
+        "completion_rate": calculate_completion_rate(check_ins),
     }
+
+
+def calculate_today_completion_rate():
+    """
+    Calculate today's completion rate.
+    """
+    summary = get_daily_summary()
+
+    return summary["completion_rate"]
