@@ -196,6 +196,123 @@ def get_expense(expense_id):
     return row
 
 
+def find_expense_by_transaction_reference(
+    transaction_reference,
+):
+    if not transaction_reference:
+        return None
+
+    connection = get_connection()
+
+    row = connection.execute(
+        """
+        SELECT
+            id,
+            expense_date,
+            category,
+            subcategory,
+            amount,
+            description,
+            payment_method,
+            source,
+            merchant,
+            transaction_reference,
+            notes
+        FROM expenses
+        WHERE transaction_reference = ?
+        LIMIT 1
+        """,
+        (transaction_reference,),
+    ).fetchone()
+
+    connection.close()
+
+    return row
+
+
+def find_possible_duplicate_expense(
+    expense_date,
+    amount,
+    merchant=None,
+    description=None,
+    source=None,
+):
+    connection = get_connection()
+
+    rows = connection.execute(
+        """
+        SELECT
+            id,
+            expense_date,
+            amount,
+            description,
+            merchant,
+            source
+        FROM expenses
+        WHERE expense_date = ?
+          AND amount = ?
+        ORDER BY id DESC
+        """,
+        (
+            expense_date,
+            amount,
+        ),
+    ).fetchall()
+
+    connection.close()
+
+    merchant_text = (
+        (merchant or "").strip().lower()
+    )
+
+    description_text = (
+        (description or "").strip().lower()
+    )
+
+    for row in rows:
+        existing_merchant = (
+            (row[4] or "").strip().lower()
+        )
+
+        existing_description = (
+            (row[3] or "").strip().lower()
+        )
+
+        merchant_match = (
+            bool(merchant_text)
+            and bool(existing_merchant)
+            and (
+                merchant_text in existing_merchant
+                or existing_merchant in merchant_text
+            )
+        )
+
+        description_match = (
+            bool(description_text)
+            and bool(existing_description)
+            and (
+                description_text
+                in existing_description
+                or existing_description
+                in description_text
+            )
+        )
+
+        source_match = (
+            not source
+            or not row[5]
+            or source == row[5]
+        )
+
+        if source_match and (
+            merchant_match
+            or description_match
+        ):
+            return row
+
+    return None
+
+
 def update_expense(
     expense_id,
     category=None,
@@ -221,7 +338,8 @@ def update_expense(
             payment_method = COALESCE(?, payment_method),
             source = COALESCE(?, source),
             merchant = COALESCE(?, merchant),
-            transaction_reference = COALESCE(?, transaction_reference),
+            transaction_reference =
+                COALESCE(?, transaction_reference),
             notes = COALESCE(?, notes)
         WHERE id = ?
         """,

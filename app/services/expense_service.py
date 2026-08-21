@@ -20,6 +20,9 @@ VALID_SOURCES = {
     "sms",
     "upi",
     "bank",
+    "credit_card",
+    "debit_card",
+    "google_play",
     "notification",
     "import",
 }
