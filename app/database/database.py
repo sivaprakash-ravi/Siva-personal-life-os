@@ -92,6 +92,60 @@ def get_checkins():
     return rows
 
 
+def get_checkins_by_date(checkin_date):
+    connection = get_connection()
+
+    rows = connection.execute(
+        """
+        SELECT
+            id,
+            checkin_date,
+            checkin_type,
+            scheduled_time,
+            completed_at,
+            status,
+            notes
+        FROM daily_checkins
+        WHERE checkin_date = ?
+        ORDER BY scheduled_time ASC
+        """,
+        (checkin_date,),
+    ).fetchall()
+
+    connection.close()
+
+    return rows
+
+
+def get_checkin_by_date_and_type(checkin_date, checkin_type):
+    connection = get_connection()
+
+    row = connection.execute(
+        """
+        SELECT
+            id,
+            checkin_date,
+            checkin_type,
+            scheduled_time,
+            completed_at,
+            status,
+            notes
+        FROM daily_checkins
+        WHERE checkin_date = ?
+          AND checkin_type = ?
+        LIMIT 1
+        """,
+        (
+            checkin_date,
+            checkin_type,
+        ),
+    ).fetchone()
+
+    connection.close()
+
+    return row
+
+
 def update_checkin(
     checkin_id,
     status=None,
