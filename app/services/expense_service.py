@@ -4,6 +4,8 @@ from app.database.expense_database import (
     add_expense,
     get_expenses,
     get_expenses_by_date,
+    get_expense,
+    update_expense,
     delete_expense,
 )
 
@@ -80,7 +82,7 @@ def record_expense(
     if expense_date is None:
         expense_date = date.today().isoformat()
 
-    add_expense(
+    return add_expense(
         expense_date=expense_date,
         category=category,
         subcategory=subcategory,
@@ -98,6 +100,10 @@ def get_all_expenses():
     return get_expenses()
 
 
+def get_expense_by_id(expense_id):
+    return get_expense(expense_id)
+
+
 def get_today_expenses():
     return get_expenses_by_date(
         date.today().isoformat()
@@ -107,6 +113,32 @@ def get_today_expenses():
 def get_expenses_for_date(expense_date):
     return get_expenses_by_date(
         expense_date.isoformat()
+    )
+
+
+def edit_expense(
+    expense_id,
+    category=None,
+    subcategory=None,
+    amount=None,
+    description=None,
+    payment_method=None,
+    source=None,
+    merchant=None,
+    transaction_reference=None,
+    notes=None,
+):
+    return update_expense(
+        expense_id=expense_id,
+        category=category,
+        subcategory=subcategory,
+        amount=amount,
+        description=description,
+        payment_method=payment_method,
+        source=source,
+        merchant=merchant,
+        transaction_reference=transaction_reference,
+        notes=notes,
     )
 
 

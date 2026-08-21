@@ -46,6 +46,10 @@ def initialize_expense_table():
             ALTER TABLE expenses
             ADD COLUMN transaction_reference TEXT
         """,
+        "notes": """
+            ALTER TABLE expenses
+            ADD COLUMN notes TEXT
+        """,
     }
 
     for column, sql in migrations.items():
@@ -70,7 +74,7 @@ def add_expense(
 ):
     connection = get_connection()
 
-    connection.execute(
+    cursor = connection.execute(
         """
         INSERT INTO expenses (
             expense_date,
@@ -100,8 +104,12 @@ def add_expense(
         ),
     )
 
+    expense_id = cursor.lastrowid
+
     connection.commit()
     connection.close()
+
+    return expense_id
 
 
 def get_expenses():
@@ -158,6 +166,86 @@ def get_expenses_by_date(expense_date):
     connection.close()
 
     return rows
+
+
+def get_expense(expense_id):
+    connection = get_connection()
+
+    row = connection.execute(
+        """
+        SELECT
+            id,
+            expense_date,
+            category,
+            subcategory,
+            amount,
+            description,
+            payment_method,
+            source,
+            merchant,
+            transaction_reference,
+            notes
+        FROM expenses
+        WHERE id = ?
+        """,
+        (expense_id,),
+    ).fetchone()
+
+    connection.close()
+
+    return row
+
+
+def update_expense(
+    expense_id,
+    category=None,
+    subcategory=None,
+    amount=None,
+    description=None,
+    payment_method=None,
+    source=None,
+    merchant=None,
+    transaction_reference=None,
+    notes=None,
+):
+    connection = get_connection()
+
+    connection.execute(
+        """
+        UPDATE expenses
+        SET
+            category = COALESCE(?, category),
+            subcategory = COALESCE(?, subcategory),
+            amount = COALESCE(?, amount),
+            description = COALESCE(?, description),
+            payment_method = COALESCE(?, payment_method),
+            source = COALESCE(?, source),
+            merchant = COALESCE(?, merchant),
+            transaction_reference = COALESCE(?, transaction_reference),
+            notes = COALESCE(?, notes)
+        WHERE id = ?
+        """,
+        (
+            category,
+            subcategory,
+            amount,
+            description,
+            payment_method,
+            source,
+            merchant,
+            transaction_reference,
+            notes,
+            expense_id,
+        ),
+    )
+
+    connection.commit()
+
+    rows_updated = connection.total_changes
+
+    connection.close()
+
+    return rows_updated
 
 
 def delete_expense(expense_id):
