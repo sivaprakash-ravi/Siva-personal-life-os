@@ -14,7 +14,7 @@ import {
   getNutrition,
   getTodayMeals,
   createMeal,
-  deleteMeal,
+  deleteMealRecord,
 } from '../services/api';
 
 type NutritionData = {
@@ -180,7 +180,7 @@ export default function NutritionScreen() {
     }
   }
 
-  async function deleteMeal(
+  async function handleDeleteMeal(
     mealId: number,
   ) {
     try {
@@ -544,7 +544,7 @@ export default function NutritionScreen() {
 
                       <Pressable
                         onPress={() =>
-                          deleteMeal(
+                          handleDeleteMeal(
                             meal.id,
                           )
                         }

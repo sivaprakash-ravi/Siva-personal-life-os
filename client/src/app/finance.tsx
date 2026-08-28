@@ -10,7 +10,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+import {
+  getFinanceDaily,
+  getFinanceMonthly,
+  getFinanceTotal,
+  getFinanceInsights,
+  getTodayExpenses,
+  createExpense,
+  deleteExpense,
+} from '../services/api';
 
 type DailyFinance = {
   date: string;
@@ -68,56 +76,50 @@ const PAYMENT_METHODS = [
 ];
 
 export default function FinanceScreen() {
-  const [daily, setDaily] = useState<DailyFinance | null>(null);
+  const [daily, setDaily] =
+    useState<DailyFinance | null>(null);
+
   const [monthly, setMonthly] =
     useState<MonthlyFinance | null>(null);
+
   const [total, setTotal] =
     useState<MonthlyTotal | null>(null);
+
   const [insights, setInsights] =
     useState<FinanceInsights | null>(null);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [expenses, setExpenses] =
+    useState<Expense[]>([]);
 
-  const [category, setCategory] = useState('food');
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [category, setCategory] =
+    useState('food');
+
   const [paymentMethod, setPaymentMethod] =
     useState('upi');
-  const [amount, setAmount] = useState('');
-  const [merchant, setMerchant] = useState('');
+
+  const [amount, setAmount] =
+    useState('');
+
+  const [merchant, setMerchant] =
+    useState('');
+
   const [description, setDescription] =
     useState('');
-  const [notes, setNotes] = useState('');
-  const [message, setMessage] = useState('');
+
+  const [notes, setNotes] =
+    useState('');
+
+  const [message, setMessage] =
+    useState('');
 
   async function loadFinance() {
     try {
-      const [
-        dailyResponse,
-        monthlyResponse,
-        totalResponse,
-        insightsResponse,
-        expensesResponse,
-      ] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/v1/finance/daily`),
-        fetch(`${API_BASE_URL}/api/v1/finance/monthly`),
-        fetch(`${API_BASE_URL}/api/v1/finance/total`),
-        fetch(`${API_BASE_URL}/api/v1/finance/insights`),
-        fetch(
-          `${API_BASE_URL}/api/v1/finance/expenses/today`,
-        ),
-      ]);
-
-      if (
-        !dailyResponse.ok ||
-        !monthlyResponse.ok ||
-        !totalResponse.ok ||
-        !insightsResponse.ok ||
-        !expensesResponse.ok
-      ) {
-        throw new Error('Failed to load finance data');
-      }
-
       const [
         dailyData,
         monthlyData,
@@ -125,20 +127,37 @@ export default function FinanceScreen() {
         insightData,
         expenseData,
       ] = await Promise.all([
-        dailyResponse.json(),
-        monthlyResponse.json(),
-        totalResponse.json(),
-        insightsResponse.json(),
-        expensesResponse.json(),
+        getFinanceDaily(),
+        getFinanceMonthly(),
+        getFinanceTotal(),
+        getFinanceInsights(),
+        getTodayExpenses(),
       ]);
 
-      setDaily(dailyData);
-      setMonthly(monthlyData);
-      setTotal(totalData);
-      setInsights(insightData);
-      setExpenses(expenseData);
+      setDaily(
+        dailyData as DailyFinance,
+      );
+
+      setMonthly(
+        monthlyData as MonthlyFinance,
+      );
+
+      setTotal(
+        totalData as MonthlyTotal,
+      );
+
+      setInsights(
+        insightData as FinanceInsights,
+      );
+
+      setExpenses(
+        expenseData as Expense[],
+      );
     } catch (error) {
-      console.error('Finance API:', error);
+      console.error(
+        'Finance API:',
+        error,
+      );
     } finally {
       setLoading(false);
     }
@@ -150,17 +169,22 @@ export default function FinanceScreen() {
 
   async function addExpense() {
     if (!amount.trim()) {
-      setMessage('Enter an amount first.');
+      setMessage(
+        'Enter an amount first.',
+      );
       return;
     }
 
-    const numericAmount = Number(amount);
+    const numericAmount =
+      Number(amount);
 
     if (
       Number.isNaN(numericAmount) ||
       numericAmount <= 0
     ) {
-      setMessage('Enter a valid amount.');
+      setMessage(
+        'Enter a valid amount.',
+      );
       return;
     }
 
@@ -168,42 +192,36 @@ export default function FinanceScreen() {
     setMessage('');
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/finance/expenses`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: numericAmount,
-            category,
-            description:
-              description.trim() || null,
-            payment_method: paymentMethod,
-            source: 'manual',
-            merchant:
-              merchant.trim() || null,
-            notes: notes.trim() || null,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          await response.text(),
-        );
-      }
+      await createExpense({
+        amount: numericAmount,
+        category,
+        description:
+          description.trim() || null,
+        payment_method:
+          paymentMethod,
+        source: 'manual',
+        merchant:
+          merchant.trim() || null,
+        notes:
+          notes.trim() || null,
+      });
 
       setAmount('');
       setMerchant('');
       setDescription('');
       setNotes('');
-      setMessage('Expense recorded.');
+
+      setMessage(
+        'Expense recorded.',
+      );
 
       await loadFinance();
     } catch (error) {
-      console.error('Expense API:', error);
+      console.error(
+        'Expense API:',
+        error,
+      );
+
       setMessage(
         'Could not save the expense.',
       );
@@ -212,20 +230,13 @@ export default function FinanceScreen() {
     }
   }
 
-  async function deleteExpense(expenseId: number) {
+  async function handleDeleteExpense(
+    expenseId: number,
+  ) {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/finance/expenses/${expenseId}`,
-        {
-          method: 'DELETE',
-        },
+      await deleteExpense(
+        expenseId,
       );
-
-      if (!response.ok) {
-        throw new Error(
-          'Failed to delete expense',
-        );
-      }
 
       await loadFinance();
     } catch (error) {
@@ -242,20 +253,32 @@ export default function FinanceScreen() {
     0;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
       >
-        <Text style={styles.eyebrow}>
+        <Text
+          style={styles.eyebrow}
+        >
           SIVA OS
         </Text>
 
-        <Text style={styles.title}>
+        <Text
+          style={styles.title}
+        >
           Finance
         </Text>
 
-        <Text style={styles.subtitle}>
+        <Text
+          style={styles.subtitle}
+        >
           Spending and financial activity.
         </Text>
 
@@ -265,37 +288,58 @@ export default function FinanceScreen() {
           />
         ) : (
           <>
-            <View style={styles.dateCard}>
+            <View
+              style={styles.dateCard}
+            >
               <View>
-                <Text style={styles.cardLabel}>
+                <Text
+                  style={styles.cardLabel}
+                >
                   TODAY
                 </Text>
 
-                <Text style={styles.date}>
+                <Text
+                  style={styles.date}
+                >
                   {daily?.date ?? '—'}
                 </Text>
               </View>
 
-              <Text style={styles.status}>
+              <Text
+                style={styles.status}
+              >
                 LIVE
               </Text>
             </View>
 
-            <View style={styles.heroCard}>
-              <Text style={styles.heroLabel}>
+            <View
+              style={styles.heroCard}
+            >
+              <Text
+                style={styles.heroLabel}
+              >
                 THIS MONTH
               </Text>
 
-              <Text style={styles.heroValue}>
-                ₹{formatAmount(monthlyAmount)}
+              <Text
+                style={styles.heroValue}
+              >
+                ₹
+                {formatAmount(
+                  monthlyAmount,
+                )}
               </Text>
 
-              <Text style={styles.heroSubtext}>
+              <Text
+                style={styles.heroSubtext}
+              >
                 Total recorded spending
               </Text>
             </View>
 
-            <View style={styles.grid}>
+            <View
+              style={styles.grid}
+            >
               <Metric
                 title="Today's Spending"
                 value={`₹${formatAmount(
@@ -321,12 +365,18 @@ export default function FinanceScreen() {
               />
             </View>
 
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={styles.sectionTitle}
+            >
               Add Expense
             </Text>
 
-            <View style={styles.formCard}>
-              <Text style={styles.inputLabel}>
+            <View
+              style={styles.formCard}
+            >
+              <Text
+                style={styles.inputLabel}
+              >
                 CATEGORY
               </Text>
 
@@ -339,32 +389,42 @@ export default function FinanceScreen() {
                   styles.selector
                 }
               >
-                {CATEGORIES.map((item) => (
-                  <Pressable
-                    key={item}
-                    onPress={() =>
-                      setCategory(item)
-                    }
-                    style={[
-                      styles.option,
-                      category === item &&
-                        styles.optionSelected,
-                    ]}
-                  >
-                    <Text
+                {CATEGORIES.map(
+                  (item) => (
+                    <Pressable
+                      key={item}
+                      onPress={() =>
+                        setCategory(
+                          item,
+                        )
+                      }
                       style={[
-                        styles.optionText,
-                        category === item &&
-                          styles.optionTextSelected,
+                        styles.option,
+                        category ===
+                          item &&
+                          styles.optionSelected,
                       ]}
                     >
-                      {formatLabel(item)}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={[
+                          styles.optionText,
+                          category ===
+                            item &&
+                            styles.optionTextSelected,
+                        ]}
+                      >
+                        {formatLabel(
+                          item,
+                        )}
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
               </ScrollView>
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 AMOUNT
               </Text>
 
@@ -377,7 +437,9 @@ export default function FinanceScreen() {
                 style={styles.input}
               />
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 PAYMENT METHOD
               </Text>
 
@@ -390,56 +452,74 @@ export default function FinanceScreen() {
                   styles.selector
                 }
               >
-                {PAYMENT_METHODS.map((item) => (
-                  <Pressable
-                    key={item}
-                    onPress={() =>
-                      setPaymentMethod(item)
-                    }
-                    style={[
-                      styles.option,
-                      paymentMethod === item &&
-                        styles.optionSelected,
-                    ]}
-                  >
-                    <Text
+                {PAYMENT_METHODS.map(
+                  (item) => (
+                    <Pressable
+                      key={item}
+                      onPress={() =>
+                        setPaymentMethod(
+                          item,
+                        )
+                      }
                       style={[
-                        styles.optionText,
-                        paymentMethod === item &&
-                          styles.optionTextSelected,
+                        styles.option,
+                        paymentMethod ===
+                          item &&
+                          styles.optionSelected,
                       ]}
                     >
-                      {formatLabel(item)}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={[
+                          styles.optionText,
+                          paymentMethod ===
+                            item &&
+                            styles.optionTextSelected,
+                        ]}
+                      >
+                        {formatLabel(
+                          item,
+                        )}
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
               </ScrollView>
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 MERCHANT
               </Text>
 
               <TextInput
                 value={merchant}
-                onChangeText={setMerchant}
+                onChangeText={
+                  setMerchant
+                }
                 placeholder="e.g. Swiggy"
                 placeholderTextColor="#5F6672"
                 style={styles.input}
               />
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 DESCRIPTION
               </Text>
 
               <TextInput
                 value={description}
-                onChangeText={setDescription}
+                onChangeText={
+                  setDescription
+                }
                 placeholder="What was this expense for?"
                 placeholderTextColor="#5F6672"
                 style={styles.input}
               />
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 NOTES
               </Text>
 
@@ -472,7 +552,9 @@ export default function FinanceScreen() {
                   />
                 ) : (
                   <Text
-                    style={styles.saveButtonText}
+                    style={
+                      styles.saveButtonText
+                    }
                   >
                     Save Expense
                   </Text>
@@ -480,107 +562,137 @@ export default function FinanceScreen() {
               </Pressable>
 
               {message ? (
-                <Text style={styles.message}>
+                <Text
+                  style={styles.message}
+                >
                   {message}
                 </Text>
               ) : null}
             </View>
 
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={styles.sectionTitle}
+            >
               Today's Expenses
             </Text>
 
-            <View style={styles.list}>
+            <View
+              style={styles.list}
+            >
               {expenses.length === 0 ? (
-                <Text style={styles.emptyText}>
+                <Text
+                  style={styles.emptyText}
+                >
                   No expenses recorded today.
                 </Text>
               ) : (
-                expenses.map((expense, index) => (
-                  <View
-                    key={expense.id}
-                    style={[
-                      styles.expenseRow,
-                      index ===
-                        expenses.length - 1 &&
-                        styles.lastRow,
-                    ]}
-                  >
+                expenses.map(
+                  (
+                    expense,
+                    index,
+                  ) => (
                     <View
-                      style={styles.expenseInfo}
+                      key={expense.id}
+                      style={[
+                        styles.expenseRow,
+                        index ===
+                          expenses.length -
+                            1 &&
+                          styles.lastRow,
+                      ]}
                     >
-                      <Text
-                        style={styles.expenseTitle}
-                      >
-                        {expense.merchant ||
-                          formatLabel(
-                            expense.category,
-                          )}
-                      </Text>
-
-                      <Text
-                        style={styles.expenseDescription}
-                      >
-                        {expense.description ||
-                          formatLabel(
-                            expense.category,
-                          )}
-                      </Text>
-
-                      <Text
-                        style={styles.expenseMeta}
-                      >
-                        {formatLabel(
-                          expense.category,
-                        )}
-                        {' • '}
-                        {formatLabel(
-                          expense.payment_method ||
-                            'other',
-                        )}
-                        {' • '}
-                        {expense.source}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.expenseRight
-                      }
-                    >
-                      <Text
-                        style={styles.expenseAmount}
-                      >
-                        ₹
-                        {formatAmount(
-                          expense.amount,
-                        )}
-                      </Text>
-
-                      <Pressable
-                        onPress={() =>
-                          deleteExpense(
-                            expense.id,
-                          )
+                      <View
+                        style={
+                          styles.expenseInfo
                         }
                       >
                         <Text
-                          style={styles.deleteText}
+                          style={
+                            styles.expenseTitle
+                          }
                         >
-                          Delete
+                          {expense.merchant ||
+                            formatLabel(
+                              expense.category,
+                            )}
                         </Text>
-                      </Pressable>
+
+                        <Text
+                          style={
+                            styles.expenseDescription
+                          }
+                        >
+                          {expense.description ||
+                            formatLabel(
+                              expense.category,
+                            )}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.expenseMeta
+                          }
+                        >
+                          {formatLabel(
+                            expense.category,
+                          )}
+                          {' • '}
+                          {formatLabel(
+                            expense.payment_method ||
+                              'other',
+                          )}
+                          {' • '}
+                          {expense.source}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={
+                          styles.expenseRight
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.expenseAmount
+                          }
+                        >
+                          ₹
+                          {formatAmount(
+                            expense.amount,
+                          )}
+                        </Text>
+
+                        <Pressable
+                          onPress={() =>
+                            handleDeleteExpense(
+                              expense.id,
+                            )
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.deleteText
+                            }
+                          >
+                            Delete
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
-                  </View>
-                ))
+                  ),
+                )
               )}
             </View>
 
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={styles.sectionTitle}
+            >
               Spending Overview
             </Text>
 
-            <View style={styles.summaryCard}>
+            <View
+              style={styles.summaryCard}
+            >
               <Detail
                 title="Today"
                 value={`₹${formatAmount(
@@ -607,26 +719,43 @@ export default function FinanceScreen() {
               />
             </View>
 
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={styles.sectionTitle}
+            >
               Insights
             </Text>
 
-            <View style={styles.insightCard}>
+            <View
+              style={styles.insightCard}
+            >
               {insights &&
-              Object.keys(insights).length > 0 ? (
-                Object.entries(insights)
+              Object.keys(
+                insights,
+              ).length > 0 ? (
+                Object.entries(
+                  insights,
+                )
                   .slice(0, 6)
-                  .map(([key, value]) => (
-                    <Detail
-                      key={key}
-                      title={formatLabel(key)}
-                      value={formatInsightValue(
-                        value,
-                      )}
-                    />
-                  ))
+                  .map(
+                    ([
+                      key,
+                      value,
+                    ]) => (
+                      <Detail
+                        key={key}
+                        title={formatLabel(
+                          key,
+                        )}
+                        value={formatInsightValue(
+                          value,
+                        )}
+                      />
+                    ),
+                  )
               ) : (
-                <Text style={styles.emptyText}>
+                <Text
+                  style={styles.emptyText}
+                >
                   No spending insights available
                   yet.
                 </Text>
@@ -639,8 +768,12 @@ export default function FinanceScreen() {
   );
 }
 
-function formatAmount(value: number) {
-  return Number(value || 0).toLocaleString(
+function formatAmount(
+  value: number,
+) {
+  return Number(
+    value || 0,
+  ).toLocaleString(
     'en-IN',
     {
       maximumFractionDigits: 2,
@@ -648,31 +781,49 @@ function formatAmount(value: number) {
   );
 }
 
-function formatLabel(value: string) {
+function formatLabel(
+  value: string,
+) {
   return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase(),
+    .replace(
+      /_/g,
+      ' ',
+    )
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase(),
     );
 }
 
 function formatInsightValue(
   value: unknown,
 ) {
-  if (typeof value === 'number') {
-    return value.toLocaleString('en-IN', {
-      maximumFractionDigits: 2,
-    });
+  if (
+    typeof value ===
+    'number'
+  ) {
+    return value.toLocaleString(
+      'en-IN',
+      {
+        maximumFractionDigits: 2,
+      },
+    );
   }
 
   if (
-    typeof value === 'object' &&
+    typeof value ===
+      'object' &&
     value !== null
   ) {
-    return JSON.stringify(value);
+    return JSON.stringify(
+      value,
+    );
   }
 
-  return String(value ?? '—');
+  return String(
+    value ?? '—',
+  );
 }
 
 function Metric({
@@ -683,12 +834,24 @@ function Metric({
   value: string;
 }) {
   return (
-    <View style={styles.metricCard}>
-      <Text style={styles.metricTitle}>
+    <View
+      style={
+        styles.metricCard
+      }
+    >
+      <Text
+        style={
+          styles.metricTitle
+        }
+      >
         {title}
       </Text>
 
-      <Text style={styles.metricValue}>
+      <Text
+        style={
+          styles.metricValue
+        }
+      >
         {value}
       </Text>
     </View>
@@ -708,14 +871,23 @@ function Detail({
     <View
       style={[
         styles.detailRow,
-        last && styles.detailRowLast,
+        last &&
+          styles.detailRowLast,
       ]}
     >
-      <Text style={styles.detailTitle}>
+      <Text
+        style={
+          styles.detailTitle
+        }
+      >
         {title}
       </Text>
 
-      <Text style={styles.detailValue}>
+      <Text
+        style={
+          styles.detailValue
+        }
+      >
         {value}
       </Text>
     </View>

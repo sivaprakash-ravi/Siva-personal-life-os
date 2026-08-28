@@ -106,7 +106,9 @@ export function getNutrition() {
 }
 
 export function getTodayMeals() {
-  return request('/api/v1/nutrition/meals/today');
+  return request(
+    '/api/v1/nutrition/meals/today',
+  );
 }
 
 export function createMeal(
@@ -174,6 +176,17 @@ export function createExpense(
     {
       method: 'POST',
       body: JSON.stringify(expense),
+    },
+  );
+}
+
+export function deleteExpense(
+  expenseId: number,
+) {
+  return request(
+    `/api/v1/finance/expenses/${expenseId}`,
+    {
+      method: 'DELETE',
     },
   );
 }
