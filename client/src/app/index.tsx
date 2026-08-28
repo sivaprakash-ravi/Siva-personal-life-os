@@ -9,7 +9,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+import {
+  getDailySummary,
+  getTodayCheckins,
+  completeCheckin,
+  undoCheckin,
+} from '../services/api';
 
 type DailySummary = {
   date: string;
@@ -31,34 +36,47 @@ type CheckIn = {
 };
 
 export default function TodayScreen() {
-  const [summary, setSummary] = useState<DailySummary | null>(null);
-  const [checkins, setCheckins] = useState<CheckIn[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [summary, setSummary] =
+    useState<DailySummary | null>(null);
+
+  const [checkins, setCheckins] =
+    useState<CheckIn[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [updatingId, setUpdatingId] =
+    useState<number | null>(null);
 
   const loadToday = useCallback(async () => {
     try {
-      const [summaryResponse, checkinsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/v1/daily`),
-        fetch(`${API_BASE_URL}/api/v1/daily/checkins`),
-      ]);
+      const [summaryData, checkinsData] =
+        await Promise.all([
+          getDailySummary(),
+          getTodayCheckins(),
+        ]);
 
-      if (!summaryResponse.ok || !checkinsResponse.ok) {
-        throw new Error('Failed to load today data');
-      }
+      setSummary(
+        summaryData as DailySummary,
+      );
 
-      const summaryData = await summaryResponse.json();
-      const checkinsData = await checkinsResponse.json();
+      const normalizedCheckins =
+        Array.isArray(checkinsData)
+          ? checkinsData
+          : (
+              checkinsData as {
+                value?: CheckIn[];
+              }
+            ).value ?? [];
 
-      setSummary(summaryData);
-
-      const normalizedCheckins = Array.isArray(checkinsData)
-        ? checkinsData
-        : checkinsData.value ?? [];
-
-      setCheckins(normalizedCheckins);
+      setCheckins(
+        normalizedCheckins as CheckIn[],
+      );
     } catch (error) {
-      console.error('Today API:', error);
+      console.error(
+        'Today API:',
+        error,
+      );
     } finally {
       setLoading(false);
     }
@@ -68,82 +86,137 @@ export default function TodayScreen() {
     loadToday();
   }, [loadToday]);
 
-  const toggleCheckin = async (checkin: CheckIn) => {
+  const toggleCheckin = async (
+    checkin: CheckIn,
+  ) => {
     try {
       setUpdatingId(checkin.id);
 
-      const endpoint =
+      if (
         checkin.status === 'completed'
-          ? `${API_BASE_URL}/api/v1/daily/checkins/${checkin.id}/undo`
-          : `${API_BASE_URL}/api/v1/daily/checkins/${checkin.id}/complete`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update check-in');
+      ) {
+        await undoCheckin(checkin.id);
+      } else {
+        await completeCheckin(
+          checkin.id,
+        );
       }
 
       await loadToday();
     } catch (error) {
-      console.error('Check-in update:', error);
+      console.error(
+        'Check-in update:',
+        error,
+      );
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const completionRate = summary?.completion_rate ?? 0;
+  const completionRate =
+    summary?.completion_rate ?? 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView
+      style={styles.container}
+      edges={['top', 'bottom']}
+    >
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={
+          styles.content
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* BRANDING */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.eyebrow}>PERSONAL LIFE OS</Text>
-            <Text style={styles.logo}>Siva OS</Text>
-            <Text style={styles.tagline}>Your life, in one place.</Text>
+            <Text style={styles.eyebrow}>
+              PERSONAL LIFE OS
+            </Text>
+
+            <Text style={styles.logo}>
+              Siva OS
+            </Text>
+
+            <Text style={styles.tagline}>
+              Your life, in one place.
+            </Text>
           </View>
 
-          <View style={styles.onlineBadge}>
-            <View style={styles.onlineDot} />
-            <Text style={styles.onlineText}>ONLINE</Text>
+          <View
+            style={styles.onlineBadge}
+          >
+            <View
+              style={styles.onlineDot}
+            />
+
+            <Text
+              style={styles.onlineText}
+            >
+              ONLINE
+            </Text>
           </View>
         </View>
 
-        {/* TODAY */}
-        <Text style={styles.sectionTitle}>Today</Text>
+        <Text
+          style={styles.sectionTitle}
+        >
+          Today
+        </Text>
 
         {loading ? (
-          <ActivityIndicator size="large" style={styles.loader} />
+          <ActivityIndicator
+            size="large"
+            style={styles.loader}
+          />
         ) : (
           <>
-            {/* COMPLETION CARD */}
-            <View style={styles.completionCard}>
-              <View style={styles.completionHeader}>
-                <Text style={styles.cardEyebrow}>DAILY COMPLETION</Text>
+            <View
+              style={styles.completionCard}
+            >
+              <View
+                style={
+                  styles.completionHeader
+                }
+              >
+                <Text
+                  style={styles.cardEyebrow}
+                >
+                  DAILY COMPLETION
+                </Text>
 
-                <Text style={styles.dateText}>
+                <Text
+                  style={styles.dateText}
+                >
                   {summary?.date ?? ''}
                 </Text>
               </View>
 
-              <Text style={styles.completionValue}>
-                {Math.round(completionRate)}%
+              <Text
+                style={
+                  styles.completionValue
+                }
+              >
+                {Math.round(
+                  completionRate,
+                )}
+                %
               </Text>
 
-              <View style={styles.progressTrack}>
+              <View
+                style={
+                  styles.progressTrack
+                }
+              >
                 <View
                   style={[
                     styles.progressFill,
                     {
                       width: `${Math.min(
-                        Math.max(completionRate, 0),
-                        100
+                        Math.max(
+                          completionRate,
+                          0,
+                        ),
+                        100,
                       )}%`,
                     },
                   ]}
@@ -151,73 +224,115 @@ export default function TodayScreen() {
               </View>
             </View>
 
-            {/* SUMMARY CARDS */}
-            <View style={styles.summaryGrid}>
+            <View
+              style={styles.summaryGrid}
+            >
               <SummaryCard
                 title="Completed"
-                value={summary?.completed ?? 0}
+                value={
+                  summary?.completed ?? 0
+                }
               />
 
               <SummaryCard
                 title="Pending"
-                value={summary?.pending ?? 0}
+                value={
+                  summary?.pending ?? 0
+                }
               />
 
               <SummaryCard
                 title="Missed"
-                value={summary?.missed ?? 0}
+                value={
+                  summary?.missed ?? 0
+                }
               />
 
               <SummaryCard
                 title="Total"
-                value={summary?.total ?? 0}
+                value={
+                  summary?.total ?? 0
+                }
               />
             </View>
 
-            {/* TODAY'S FOCUS */}
-            <View style={styles.focusCard}>
-              <Text style={styles.cardEyebrow}>TODAY'S FOCUS</Text>
+            <View
+              style={styles.focusCard}
+            >
+              <Text
+                style={styles.cardEyebrow}
+              >
+                TODAY'S FOCUS
+              </Text>
 
-              <Text style={styles.focusTitle}>
+              <Text
+                style={styles.focusTitle}
+              >
                 {summary?.total
                   ? 'Keep moving.'
                   : 'Build the day.'}
               </Text>
 
-              <Text style={styles.focusText}>
-                Complete your planned check-ins and let Siva OS
+              <Text
+                style={styles.focusText}
+              >
+                Complete your planned
+                check-ins and let Siva OS
                 track the progress.
               </Text>
             </View>
 
-            {/* CHECK-INS */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Check-ins</Text>
+            <View
+              style={styles.sectionHeader}
+            >
+              <Text
+                style={styles.sectionTitle}
+              >
+                Check-ins
+              </Text>
 
-              <Text style={styles.countText}>
+              <Text
+                style={styles.countText}
+              >
                 {checkins.length} today
               </Text>
             </View>
 
             {checkins.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>
+              <View
+                style={styles.emptyCard}
+              >
+                <Text
+                  style={styles.emptyTitle}
+                >
                   No check-ins for today
                 </Text>
 
-                <Text style={styles.emptyText}>
-                  Your daily schedule is ready to be connected.
+                <Text
+                  style={styles.emptyText}
+                >
+                  Your daily schedule is
+                  ready to be connected.
                 </Text>
               </View>
             ) : (
-              checkins.map((checkin) => (
-                <CheckInCard
-                  key={checkin.id}
-                  checkin={checkin}
-                  updating={updatingId === checkin.id}
-                  onPress={() => toggleCheckin(checkin)}
-                />
-              ))
+              checkins.map(
+                (checkin) => (
+                  <CheckInCard
+                    key={checkin.id}
+                    checkin={checkin}
+                    updating={
+                      updatingId ===
+                      checkin.id
+                    }
+                    onPress={() =>
+                      toggleCheckin(
+                        checkin,
+                      )
+                    }
+                  />
+                ),
+              )
             )}
           </>
         )}
@@ -234,9 +349,20 @@ function SummaryCard({
   value: number;
 }) {
   return (
-    <View style={styles.summaryCard}>
-      <Text style={styles.summaryTitle}>{title}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
+    <View
+      style={styles.summaryCard}
+    >
+      <Text
+        style={styles.summaryTitle}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={styles.summaryValue}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
@@ -250,54 +376,85 @@ function CheckInCard({
   updating: boolean;
   onPress: () => void;
 }) {
-  const completed = checkin.status === 'completed';
-  const missed = checkin.status === 'missed';
+  const completed =
+    checkin.status ===
+    'completed';
+
+  const missed =
+    checkin.status === 'missed';
 
   const displayType =
-    checkin.type.charAt(0).toUpperCase() +
+    checkin.type
+      .charAt(0)
+      .toUpperCase() +
     checkin.type.slice(1);
 
   return (
     <View
       style={[
         styles.checkinCard,
-        completed && styles.checkinCompleted,
+        completed &&
+          styles.checkinCompleted,
       ]}
     >
-      <View style={styles.checkinInfo}>
+      <View
+        style={styles.checkinInfo}
+      >
         <Text
           style={[
             styles.checkinTitle,
-            completed && styles.completedText,
+            completed &&
+              styles.completedText,
           ]}
         >
           {displayType}
         </Text>
 
-        <Text style={styles.checkinTime}>
-          Scheduled {checkin.scheduled_time}
+        <Text
+          style={styles.checkinTime}
+        >
+          Scheduled{' '}
+          {checkin.scheduled_time}
         </Text>
 
         {missed && (
-          <Text style={styles.missedText}>Missed</Text>
+          <Text
+            style={styles.missedText}
+          >
+            Missed
+          </Text>
         )}
       </View>
 
       <Pressable
         onPress={onPress}
-        disabled={updating || missed}
+        disabled={
+          updating || missed
+        }
         style={({ pressed }) => [
           styles.actionButton,
-          completed && styles.undoButton,
-          pressed && styles.buttonPressed,
-          (updating || missed) && styles.buttonDisabled,
+          completed &&
+            styles.undoButton,
+          pressed &&
+            styles.buttonPressed,
+          (updating || missed) &&
+            styles.buttonDisabled,
         ]}
       >
         {updating ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
+          <ActivityIndicator
+            size="small"
+            color="#FFFFFF"
+          />
         ) : (
-          <Text style={styles.actionButtonText}>
-            {completed ? 'Undo' : 'Complete'}
+          <Text
+            style={
+              styles.actionButtonText
+            }
+          >
+            {completed
+              ? 'Undo'
+              : 'Complete'}
           </Text>
         )}
       </Pressable>
