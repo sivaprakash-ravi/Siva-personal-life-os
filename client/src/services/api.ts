@@ -26,6 +26,10 @@ async function request<T>(
   return response.json();
 }
 
+/* -------------------------
+   Daily
+------------------------- */
+
 export function getDailySummary() {
   return request('/api/v1/daily');
 }
@@ -34,7 +38,9 @@ export function getTodayCheckins() {
   return request('/api/v1/daily/checkins');
 }
 
-export function completeCheckin(checkinId: number) {
+export function completeCheckin(
+  checkinId: number,
+) {
   return request(
     `/api/v1/daily/checkins/${checkinId}/complete`,
     {
@@ -43,7 +49,9 @@ export function completeCheckin(checkinId: number) {
   );
 }
 
-export function undoCheckin(checkinId: number) {
+export function undoCheckin(
+  checkinId: number,
+) {
   return request(
     `/api/v1/daily/checkins/${checkinId}/undo`,
     {
@@ -52,32 +60,83 @@ export function undoCheckin(checkinId: number) {
   );
 }
 
+/* -------------------------
+   Health
+------------------------- */
+
 export function getHealth() {
   return request('/api/v1/health');
 }
+
+export function getTodayHealthRecords() {
+  return request(
+    '/api/v1/health/records/today',
+  );
+}
+
+export function createHealthRecord(
+  record: Record<string, unknown>,
+) {
+  return request(
+    '/api/v1/health/records',
+    {
+      method: 'POST',
+      body: JSON.stringify(record),
+    },
+  );
+}
+
+export function deleteHealthRecord(
+  recordId: number,
+) {
+  return request(
+    `/api/v1/health/records/${recordId}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+/* -------------------------
+   Nutrition
+------------------------- */
 
 export function getNutrition() {
   return request('/api/v1/nutrition');
 }
 
+/* -------------------------
+   Finance
+------------------------- */
+
 export function getFinanceDaily() {
-  return request('/api/v1/finance/daily');
+  return request(
+    '/api/v1/finance/daily',
+  );
 }
 
 export function getFinanceMonthly() {
-  return request('/api/v1/finance/monthly');
+  return request(
+    '/api/v1/finance/monthly',
+  );
 }
 
 export function getFinanceTotal() {
-  return request('/api/v1/finance/total');
+  return request(
+    '/api/v1/finance/total',
+  );
 }
 
 export function getFinanceInsights() {
-  return request('/api/v1/finance/insights');
+  return request(
+    '/api/v1/finance/insights',
+  );
 }
 
 export function getTodayExpenses() {
-  return request('/api/v1/finance/expenses/today');
+  return request(
+    '/api/v1/finance/expenses/today',
+  );
 }
 
 export function createExpense(

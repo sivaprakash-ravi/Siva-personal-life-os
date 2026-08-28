@@ -10,7 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+import {
+  getHealth,
+  getTodayHealthRecords,
+  createHealthRecord,
+  deleteHealthRecord,
+} from '../services/api';
 
 type HealthData = {
   date: string;
@@ -68,26 +73,17 @@ export default function HealthScreen() {
   const [selectedMetric, setSelectedMetric] = useState('steps');
   const [value, setValue] = useState('');
   const [notes, setNotes] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState('');
 
   async function loadHealth() {
     try {
-      const [summaryResponse, recordsResponse] =
-        await Promise.all([
-          fetch(`${API_BASE_URL}/api/v1/health`),
-          fetch(`${API_BASE_URL}/api/v1/health/records/today`),
-        ]);
+      const [summary, todayRecords] = await Promise.all([
+        getHealth(),
+        getTodayHealthRecords(),
+      ]);
 
-      if (!summaryResponse.ok || !recordsResponse.ok) {
-        throw new Error('Failed to load health data');
-      }
-
-      const summary = await summaryResponse.json();
-      const todayRecords = await recordsResponse.json();
-
-      setData(summary);
-      setRecords(todayRecords);
+      setData(summary as HealthData);
+      setRecords(todayRecords as HealthRecord[]);
     } catch (error) {
       console.error('Health API:', error);
     } finally {
@@ -124,31 +120,18 @@ export default function HealthScreen() {
     setMessage('');
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/health/records`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            metric_type: selectedMetric,
-            value: numericValue,
-            unit: metric.unit || null,
-            source: 'manual',
-            notes: notes.trim() || null,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(errorBody);
-      }
+      await createHealthRecord({
+        metric_type: selectedMetric,
+        value: numericValue,
+        unit: metric.unit || null,
+        source: 'manual',
+        notes: notes.trim() || null,
+      });
 
       setValue('');
       setNotes('');
       setMessage('Health record saved.');
+
       await loadHealth();
     } catch (error) {
       console.error('Health record:', error);
@@ -160,17 +143,7 @@ export default function HealthScreen() {
 
   async function deleteRecord(recordId: number) {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/health/records/${recordId}`,
-        {
-          method: 'DELETE',
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to delete record');
-      }
-
+      await deleteHealthRecord(recordId);
       await loadHealth();
     } catch (error) {
       console.error('Delete health record:', error);
@@ -178,8 +151,9 @@ export default function HealthScreen() {
   }
 
   const selectedMetricData =
-    METRICS.find((item) => item.key === selectedMetric) ??
-    METRICS[0];
+    METRICS.find(
+      (item) => item.key === selectedMetric,
+    ) ?? METRICS[0];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -188,7 +162,11 @@ export default function HealthScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.eyebrow}>SIVA OS</Text>
-        <Text style={styles.title}>Health</Text>
+
+        <Text style={styles.title}>
+          Health
+        </Text>
+
         <Text style={styles.subtitle}>
           Your health metrics in one place.
         </Text>
@@ -199,13 +177,18 @@ export default function HealthScreen() {
           <>
             <View style={styles.dateCard}>
               <View>
-                <Text style={styles.cardTitle}>TODAY</Text>
+                <Text style={styles.cardTitle}>
+                  TODAY
+                </Text>
+
                 <Text style={styles.date}>
                   {data?.date ?? '—'}
                 </Text>
               </View>
 
-              <Text style={styles.status}>LIVE</Text>
+              <Text style={styles.status}>
+                LIVE
+              </Text>
             </View>
 
             <View style={styles.grid}>
@@ -495,8 +478,13 @@ function Metric({
 }) {
   return (
     <View style={styles.metricCard}>
-      <Text style={styles.metricTitle}>{title}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricTitle}>
+        {title}
+      </Text>
+
+      <Text style={styles.metricValue}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -517,8 +505,13 @@ function Detail({
         last && styles.detailRowLast,
       ]}
     >
-      <Text style={styles.detailTitle}>{title}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
+      <Text style={styles.detailTitle}>
+        {title}
+      </Text>
+
+      <Text style={styles.detailValue}>
+        {value}
+      </Text>
     </View>
   );
 }
