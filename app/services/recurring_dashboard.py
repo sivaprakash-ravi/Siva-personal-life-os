@@ -3,6 +3,7 @@ from datetime import date
 from app.services.recurring_service import (
     get_all_recurring_payments,
 )
+
 from app.services.recurring_expenses import (
     get_recurrence_status,
 )
@@ -10,6 +11,7 @@ from app.services.recurring_expenses import (
 
 def get_recurring_dashboard():
     today = date.today()
+
     records = get_all_recurring_payments()
 
     dashboard = []
@@ -28,8 +30,12 @@ def get_recurring_dashboard():
             created_at,
         ) = record
 
+        if not active:
+            continue
+
         if not next_expected_date:
             status = "awaiting_first_payment"
+
         else:
             status = get_recurrence_status(
                 expected_date=next_expected_date,
@@ -47,8 +53,28 @@ def get_recurring_dashboard():
                 "last_confirmed_date": last_confirmed_date,
                 "next_expected_date": next_expected_date,
                 "status": status,
-                "active": bool(active),
+                "active": True,
             }
         )
 
     return dashboard
+
+
+def get_status_summary():
+    dashboard = get_recurring_dashboard()
+
+    summary = {
+        "upcoming": 0,
+        "due": 0,
+        "overdue": 0,
+        "renewed": 0,
+        "awaiting_first_payment": 0,
+    }
+
+    for item in dashboard:
+        status = item["status"]
+
+        if status in summary:
+            summary[status] += 1
+
+    return summary
