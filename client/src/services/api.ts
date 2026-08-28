@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = 'http://192.168.88.224:8000';
 
 async function request<T>(
   path: string,
@@ -26,20 +26,15 @@ async function request<T>(
   return response.json();
 }
 
-
 export function getDailySummary() {
   return request('/api/v1/daily');
 }
-
 
 export function getTodayCheckins() {
   return request('/api/v1/daily/checkins');
 }
 
-
-export function completeCheckin(
-  checkinId: number,
-) {
+export function completeCheckin(checkinId: number) {
   return request(
     `/api/v1/daily/checkins/${checkinId}/complete`,
     {
@@ -48,10 +43,7 @@ export function completeCheckin(
   );
 }
 
-
-export function undoCheckin(
-  checkinId: number,
-) {
+export function undoCheckin(checkinId: number) {
   return request(
     `/api/v1/daily/checkins/${checkinId}/undo`,
     {
@@ -60,43 +52,33 @@ export function undoCheckin(
   );
 }
 
-
 export function getHealth() {
   return request('/api/v1/health');
 }
-
 
 export function getNutrition() {
   return request('/api/v1/nutrition');
 }
 
-
 export function getFinanceDaily() {
   return request('/api/v1/finance/daily');
 }
-
 
 export function getFinanceMonthly() {
   return request('/api/v1/finance/monthly');
 }
 
-
 export function getFinanceTotal() {
   return request('/api/v1/finance/total');
 }
-
 
 export function getFinanceInsights() {
   return request('/api/v1/finance/insights');
 }
 
-
 export function getTodayExpenses() {
-  return request(
-    '/api/v1/finance/expenses/today',
-  );
+  return request('/api/v1/finance/expenses/today');
 }
-
 
 export function createExpense(
   expense: Record<string, unknown>,
@@ -110,7 +92,6 @@ export function createExpense(
   );
 }
 
-
 export function importTransaction(
   transaction: Record<string, unknown>,
 ) {
@@ -122,7 +103,6 @@ export function importTransaction(
     },
   );
 }
-
 
 export function importSmsTransaction(
   payload: Record<string, unknown>,
