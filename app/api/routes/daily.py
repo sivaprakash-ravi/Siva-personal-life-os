@@ -4,6 +4,7 @@ from app.services.checkin_service import (
     create_today_checkins,
     get_today_checkins,
     complete_checkin,
+    edit_checkin,
 )
 from app.services.daily_summary import get_daily_summary
 
@@ -48,4 +49,19 @@ def complete_daily_checkin(checkin_id: int):
         "checkin_id": checkin_id,
         "updated": updated,
         "status": "completed",
+    }
+
+
+@router.post("/daily/checkins/{checkin_id}/undo")
+def undo_daily_checkin(checkin_id: int):
+    updated = edit_checkin(
+        checkin_id=checkin_id,
+        status="pending",
+        completed_at=None,
+    )
+
+    return {
+        "checkin_id": checkin_id,
+        "updated": updated,
+        "status": "pending",
     }
