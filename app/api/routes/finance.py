@@ -26,6 +26,10 @@ from app.services.transaction_importer import (
     import_transaction,
 )
 
+from app.services.sms_transaction_parser import (
+    import_sms_transaction,
+)
+
 
 router = APIRouter(
     prefix="/api/v1/finance",
@@ -54,6 +58,14 @@ class TransactionImportRequest(BaseModel):
     payment_method: str | None = None
     source: str = "manual"
     transaction_reference: str | None = None
+    category: str = "other"
+    subcategory: str | None = None
+    notes: str | None = None
+
+
+class SmsTransactionRequest(BaseModel):
+    message: str
+    transaction_date: str | None = None
     category: str = "other"
     subcategory: str | None = None
     notes: str | None = None
@@ -169,6 +181,27 @@ def import_financial_transaction(
             payment_method=request.payment_method,
             source=request.source,
             transaction_reference=request.transaction_reference,
+            category=request.category,
+            subcategory=request.subcategory,
+            notes=request.notes,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return result
+
+
+@router.post("/import/sms")
+def import_sms(
+    request: SmsTransactionRequest,
+):
+    try:
+        result = import_sms_transaction(
+            message=request.message,
+            transaction_date=request.transaction_date,
             category=request.category,
             subcategory=request.subcategory,
             notes=request.notes,
