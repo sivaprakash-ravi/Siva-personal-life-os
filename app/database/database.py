@@ -29,6 +29,15 @@ def initialize_database():
         """
     )
 
+    # Prevent duplicate check-ins for the same type on the same day.
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_daily_checkins_date_type
+        ON daily_checkins (checkin_date, checkin_type)
+        """
+    )
+
     connection.commit()
     connection.close()
 
@@ -45,7 +54,7 @@ def add_checkin(
 
     connection.execute(
         """
-        INSERT INTO daily_checkins (
+        INSERT OR IGNORE INTO daily_checkins (
             checkin_date,
             checkin_type,
             scheduled_time,
