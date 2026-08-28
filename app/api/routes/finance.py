@@ -11,13 +11,19 @@ from app.services.expense_service import (
     edit_expense,
     remove_expense,
 )
+
 from app.services.expense_intelligence import (
     get_daily_expense_summary,
     get_monthly_expense_summary,
 )
+
 from app.services.spending_insights import (
     get_monthly_total,
     get_spending_insights,
+)
+
+from app.services.transaction_importer import (
+    import_transaction,
 )
 
 
@@ -38,6 +44,19 @@ class ExpenseRequest(BaseModel):
     transaction_reference: str | None = None
     notes: str | None = None
     expense_date: str | None = None
+
+
+class TransactionImportRequest(BaseModel):
+    amount: float
+    transaction_date: str | None = None
+    merchant: str | None = None
+    description: str | None = None
+    payment_method: str | None = None
+    source: str = "manual"
+    transaction_reference: str | None = None
+    category: str = "other"
+    subcategory: str | None = None
+    notes: str | None = None
 
 
 def serialize_expense(expense):
@@ -135,6 +154,32 @@ def create_expense(request: ExpenseRequest):
         "status": "recorded",
         "expense_id": expense_id,
     }
+
+
+@router.post("/import")
+def import_financial_transaction(
+    request: TransactionImportRequest,
+):
+    try:
+        result = import_transaction(
+            amount=request.amount,
+            transaction_date=request.transaction_date,
+            merchant=request.merchant,
+            description=request.description,
+            payment_method=request.payment_method,
+            source=request.source,
+            transaction_reference=request.transaction_reference,
+            category=request.category,
+            subcategory=request.subcategory,
+            notes=request.notes,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return result
 
 
 @router.put("/expenses/{expense_id}")
