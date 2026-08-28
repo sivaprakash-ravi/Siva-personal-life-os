@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.daily import router as daily_router
 from app.api.routes.health import router as health_router
@@ -11,7 +12,19 @@ from app.api.routes.unified import router as unified_router
 app = FastAPI(
     title="Siva OS",
     version="1.0.0",
-    description="Siva's Personal Life Operating System",
+    description="Siva OS Personal Life Operating System API",
+)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
