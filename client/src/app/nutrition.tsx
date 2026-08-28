@@ -10,7 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+import {
+  getNutrition,
+  getTodayMeals,
+  createMeal,
+  deleteMeal,
+} from '../services/api';
 
 type NutritionData = {
   date: string;
@@ -32,41 +37,69 @@ type Meal = {
   notes: string | null;
 };
 
-const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
+const MEAL_TYPES = [
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+];
 
 export default function NutritionScreen() {
-  const [data, setData] = useState<NutritionData | null>(null);
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [data, setData] =
+    useState<NutritionData | null>(null);
 
-  const [mealType, setMealType] = useState('breakfast');
-  const [mealTime, setMealTime] = useState('');
-  const [description, setDescription] = useState('');
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [notes, setNotes] = useState('');
-  const [message, setMessage] = useState('');
+  const [meals, setMeals] =
+    useState<Meal[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [mealType, setMealType] =
+    useState('breakfast');
+
+  const [mealTime, setMealTime] =
+    useState('');
+
+  const [description, setDescription] =
+    useState('');
+
+  const [calories, setCalories] =
+    useState('');
+
+  const [protein, setProtein] =
+    useState('');
+
+  const [notes, setNotes] =
+    useState('');
+
+  const [message, setMessage] =
+    useState('');
 
   async function loadNutrition() {
     try {
-      const [summaryResponse, mealsResponse] =
-        await Promise.all([
-          fetch(`${API_BASE_URL}/api/v1/nutrition`),
-          fetch(`${API_BASE_URL}/api/v1/nutrition/meals/today`),
-        ]);
+      const [
+        summary,
+        todayMeals,
+      ] = await Promise.all([
+        getNutrition(),
+        getTodayMeals(),
+      ]);
 
-      if (!summaryResponse.ok || !mealsResponse.ok) {
-        throw new Error('Failed to load nutrition data');
-      }
+      setData(
+        summary as NutritionData,
+      );
 
-      const summary = await summaryResponse.json();
-      const todayMeals = await mealsResponse.json();
-
-      setData(summary);
-      setMeals(todayMeals);
+      setMeals(
+        todayMeals as Meal[],
+      );
     } catch (error) {
-      console.error('Nutrition API:', error);
+      console.error(
+        'Nutrition API:',
+        error,
+      );
     } finally {
       setLoading(false);
     }
@@ -78,17 +111,21 @@ export default function NutritionScreen() {
 
   async function addMeal() {
     if (!description.trim()) {
-      setMessage('Enter what you ate first.');
+      setMessage(
+        'Enter what you ate first.',
+      );
       return;
     }
 
-    const caloriesValue = calories.trim()
-      ? Number(calories)
-      : null;
+    const caloriesValue =
+      calories.trim()
+        ? Number(calories)
+        : null;
 
-    const proteinValue = protein.trim()
-      ? Number(protein)
-      : null;
+    const proteinValue =
+      protein.trim()
+        ? Number(protein)
+        : null;
 
     if (
       (caloriesValue !== null &&
@@ -96,7 +133,9 @@ export default function NutritionScreen() {
       (proteinValue !== null &&
         Number.isNaN(proteinValue))
     ) {
-      setMessage('Calories and protein must be numbers.');
+      setMessage(
+        'Calories and protein must be numbers.',
+      );
       return;
     }
 
@@ -104,93 +143,123 @@ export default function NutritionScreen() {
     setMessage('');
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/nutrition/meals`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            meal_type: mealType,
-            meal_time: mealTime || '00:00',
-            description: description.trim(),
-            calories: caloriesValue,
-            protein_grams: proteinValue,
-            notes: notes.trim() || null,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          await response.text(),
-        );
-      }
+      await createMeal({
+        meal_type: mealType,
+        meal_time:
+          mealTime || '00:00',
+        description:
+          description.trim(),
+        calories: caloriesValue,
+        protein_grams: proteinValue,
+        notes:
+          notes.trim() || null,
+      });
 
       setDescription('');
       setMealTime('');
       setCalories('');
       setProtein('');
       setNotes('');
-      setMessage('Meal saved.');
+
+      setMessage(
+        'Meal saved.',
+      );
 
       await loadNutrition();
     } catch (error) {
-      console.error('Meal API:', error);
-      setMessage('Could not save the meal.');
+      console.error(
+        'Meal API:',
+        error,
+      );
+
+      setMessage(
+        'Could not save the meal.',
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteMeal(mealId: number) {
+  async function deleteMeal(
+    mealId: number,
+  ) {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/nutrition/meals/${mealId}`,
-        {
-          method: 'DELETE',
-        },
+      await deleteMealRecord(
+        mealId,
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to delete meal');
-      }
 
       await loadNutrition();
     } catch (error) {
-      console.error('Delete meal:', error);
+      console.error(
+        'Delete meal:',
+        error,
+      );
     }
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
       >
-        <Text style={styles.eyebrow}>SIVA OS</Text>
-        <Text style={styles.title}>Nutrition</Text>
-        <Text style={styles.subtitle}>
+        <Text
+          style={styles.eyebrow}
+        >
+          SIVA OS
+        </Text>
+
+        <Text
+          style={styles.title}
+        >
+          Nutrition
+        </Text>
+
+        <Text
+          style={styles.subtitle}
+        >
           Meals, calories and protein.
         </Text>
 
         {loading ? (
-          <ActivityIndicator style={styles.loader} />
+          <ActivityIndicator
+            style={styles.loader}
+          />
         ) : (
           <>
-            <View style={styles.dateCard}>
+            <View
+              style={styles.dateCard}
+            >
               <View>
-                <Text style={styles.cardLabel}>TODAY</Text>
-                <Text style={styles.date}>
+                <Text
+                  style={styles.cardLabel}
+                >
+                  TODAY
+                </Text>
+
+                <Text
+                  style={styles.date}
+                >
                   {data?.date ?? '—'}
                 </Text>
               </View>
 
-              <Text style={styles.live}>LIVE</Text>
+              <Text
+                style={styles.live}
+              >
+                LIVE
+              </Text>
             </View>
 
-            <View style={styles.grid}>
+            <View
+              style={styles.grid}
+            >
               <Metric
                 title="Calories"
                 value={`${data?.calories ?? 0} kcal`}
@@ -207,76 +276,114 @@ export default function NutritionScreen() {
               />
             </View>
 
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={styles.sectionTitle}
+            >
               Add Meal
             </Text>
 
-            <View style={styles.formCard}>
-              <Text style={styles.inputLabel}>
+            <View
+              style={styles.formCard}
+            >
+              <Text
+                style={styles.inputLabel}
+              >
                 MEAL TYPE
               </Text>
 
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.selector}
+                showsHorizontalScrollIndicator={
+                  false
+                }
+                contentContainerStyle={
+                  styles.selector
+                }
               >
-                {MEAL_TYPES.map((type) => (
-                  <Pressable
-                    key={type}
-                    onPress={() => setMealType(type)}
-                    style={[
-                      styles.option,
-                      mealType === type &&
-                        styles.optionSelected,
-                    ]}
-                  >
-                    <Text
+                {MEAL_TYPES.map(
+                  (type) => (
+                    <Pressable
+                      key={type}
+                      onPress={() =>
+                        setMealType(
+                          type,
+                        )
+                      }
                       style={[
-                        styles.optionText,
-                        mealType === type &&
-                          styles.optionTextSelected,
+                        styles.option,
+                        mealType ===
+                          type &&
+                          styles.optionSelected,
                       ]}
                     >
-                      {capitalize(type)}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={[
+                          styles.optionText,
+                          mealType ===
+                            type &&
+                            styles.optionTextSelected,
+                        ]}
+                      >
+                        {capitalize(
+                          type,
+                        )}
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
               </ScrollView>
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 TIME
               </Text>
 
               <TextInput
                 value={mealTime}
-                onChangeText={setMealTime}
+                onChangeText={
+                  setMealTime
+                }
                 placeholder="HH:MM"
                 placeholderTextColor="#5F6672"
                 style={styles.input}
               />
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 WHAT DID YOU EAT?
               </Text>
 
               <TextInput
                 value={description}
-                onChangeText={setDescription}
+                onChangeText={
+                  setDescription
+                }
                 placeholder="e.g. Chicken, rice and curd"
                 placeholderTextColor="#5F6672"
                 style={styles.input}
               />
 
-              <View style={styles.twoColumns}>
-                <View style={styles.column}>
-                  <Text style={styles.inputLabel}>
+              <View
+                style={styles.twoColumns}
+              >
+                <View
+                  style={styles.column}
+                >
+                  <Text
+                    style={
+                      styles.inputLabel
+                    }
+                  >
                     CALORIES
                   </Text>
 
                   <TextInput
                     value={calories}
-                    onChangeText={setCalories}
+                    onChangeText={
+                      setCalories
+                    }
                     placeholder="kcal"
                     placeholderTextColor="#5F6672"
                     keyboardType="numeric"
@@ -284,14 +391,22 @@ export default function NutritionScreen() {
                   />
                 </View>
 
-                <View style={styles.column}>
-                  <Text style={styles.inputLabel}>
+                <View
+                  style={styles.column}
+                >
+                  <Text
+                    style={
+                      styles.inputLabel
+                    }
+                  >
                     PROTEIN
                   </Text>
 
                   <TextInput
                     value={protein}
-                    onChangeText={setProtein}
+                    onChangeText={
+                      setProtein
+                    }
                     placeholder="grams"
                     placeholderTextColor="#5F6672"
                     keyboardType="numeric"
@@ -300,7 +415,9 @@ export default function NutritionScreen() {
                 </View>
               </View>
 
-              <Text style={styles.inputLabel}>
+              <Text
+                style={styles.inputLabel}
+              >
                 NOTES
               </Text>
 
@@ -321,76 +438,128 @@ export default function NutritionScreen() {
                 disabled={saving}
                 style={({ pressed }) => [
                   styles.saveButton,
-                  pressed && styles.pressed,
-                  saving && styles.disabled,
+                  pressed &&
+                    styles.pressed,
+                  saving &&
+                    styles.disabled,
                 ]}
               >
                 {saving ? (
-                  <ActivityIndicator color="#0B0D10" />
+                  <ActivityIndicator
+                    color="#0B0D10"
+                  />
                 ) : (
-                  <Text style={styles.saveText}>
+                  <Text
+                    style={
+                      styles.saveText
+                    }
+                  >
                     Save Meal
                   </Text>
                 )}
               </Pressable>
 
               {message ? (
-                <Text style={styles.message}>
+                <Text
+                  style={styles.message}
+                >
                   {message}
                 </Text>
               ) : null}
             </View>
 
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={styles.sectionTitle}
+            >
               Today's Meals
             </Text>
 
-            <View style={styles.list}>
+            <View
+              style={styles.list}
+            >
               {meals.length === 0 ? (
-                <Text style={styles.empty}>
+                <Text
+                  style={styles.empty}
+                >
                   No meals recorded today.
                 </Text>
               ) : (
-                meals.map((meal, index) => (
-                  <View
-                    key={meal.id}
-                    style={[
-                      styles.mealRow,
-                      index === meals.length - 1 &&
-                        styles.lastRow,
-                    ]}
-                  >
-                    <View style={styles.mealInfo}>
-                      <Text style={styles.mealType}>
-                        {capitalize(meal.meal_type)}
-                      </Text>
-
-                      <Text style={styles.description}>
-                        {meal.description}
-                      </Text>
-
-                      <Text style={styles.meta}>
-                        {meal.meal_time}
-                        {meal.calories != null
-                          ? ` • ${meal.calories} kcal`
-                          : ''}
-                        {meal.protein_grams != null
-                          ? ` • ${meal.protein_grams}g protein`
-                          : ''}
-                      </Text>
-                    </View>
-
-                    <Pressable
-                      onPress={() =>
-                        deleteMeal(meal.id)
-                      }
+                meals.map(
+                  (meal, index) => (
+                    <View
+                      key={meal.id}
+                      style={[
+                        styles.mealRow,
+                        index ===
+                          meals.length -
+                            1 &&
+                          styles.lastRow,
+                      ]}
                     >
-                      <Text style={styles.delete}>
-                        Delete
-                      </Text>
-                    </Pressable>
-                  </View>
-                ))
+                      <View
+                        style={
+                          styles.mealInfo
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.mealType
+                          }
+                        >
+                          {capitalize(
+                            meal.meal_type,
+                          )}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.description
+                          }
+                        >
+                          {
+                            meal.description
+                          }
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.meta
+                          }
+                        >
+                          {
+                            meal.meal_time
+                          }
+
+                          {meal.calories !=
+                          null
+                            ? ` • ${meal.calories} kcal`
+                            : ''}
+
+                          {meal.protein_grams !=
+                          null
+                            ? ` • ${meal.protein_grams}g protein`
+                            : ''}
+                        </Text>
+                      </View>
+
+                      <Pressable
+                        onPress={() =>
+                          deleteMeal(
+                            meal.id,
+                          )
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.delete
+                          }
+                        >
+                          Delete
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ),
+                )
               )}
             </View>
           </>
@@ -400,8 +569,13 @@ export default function NutritionScreen() {
   );
 }
 
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+function capitalize(
+  value: string,
+) {
+  return (
+    value.charAt(0).toUpperCase() +
+    value.slice(1)
+  );
 }
 
 function Metric({
@@ -412,9 +586,20 @@ function Metric({
   value: string;
 }) {
   return (
-    <View style={styles.metricCard}>
-      <Text style={styles.metricTitle}>{title}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+    <View
+      style={styles.metricCard}
+    >
+      <Text
+        style={styles.metricTitle}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={styles.metricValue}
+      >
+        {value}
+      </Text>
     </View>
   );
 }

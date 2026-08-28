@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://192.168.88.224:8000';
+const API_BASE_URL = 'http://10.58.227.224:8000';
 
 async function request<T>(
   path: string,
@@ -103,6 +103,33 @@ export function deleteHealthRecord(
 
 export function getNutrition() {
   return request('/api/v1/nutrition');
+}
+
+export function getTodayMeals() {
+  return request('/api/v1/nutrition/meals/today');
+}
+
+export function createMeal(
+  meal: Record<string, unknown>,
+) {
+  return request(
+    '/api/v1/nutrition/meals',
+    {
+      method: 'POST',
+      body: JSON.stringify(meal),
+    },
+  );
+}
+
+export function deleteMealRecord(
+  mealId: number,
+) {
+  return request(
+    `/api/v1/nutrition/meals/${mealId}`,
+    {
+      method: 'DELETE',
+    },
+  );
 }
 
 /* -------------------------
