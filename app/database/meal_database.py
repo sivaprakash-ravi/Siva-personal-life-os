@@ -1,11 +1,6 @@
 import sqlite3
-from pathlib import Path
 
-
-DATABASE_DIR = Path("data")
-DATABASE_DIR.mkdir(exist_ok=True)
-
-DATABASE_PATH = DATABASE_DIR / "personal_life.db"
+from app.database.database import DATABASE_PATH
 
 
 def get_connection():

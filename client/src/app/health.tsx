@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -69,13 +70,16 @@ export default function HealthScreen() {
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
 
   const [selectedMetric, setSelectedMetric] = useState('steps');
   const [value, setValue] = useState('');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
 
-  async function loadHealth() {
+  const loadHealth = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    setError(false);
     try {
       const [summary, todayRecords] = await Promise.all([
         getHealth(),
@@ -86,14 +90,20 @@ export default function HealthScreen() {
       setRecords(todayRecords as HealthRecord[]);
     } catch (error) {
       console.error('Health API:', error);
+      setError(true);
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    loadHealth();
   }, []);
+
+  const initialFocusDone = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      const first = !initialFocusDone.current;
+      initialFocusDone.current = true;
+      loadHealth(first);
+    }, [loadHealth]),
+  );
 
   async function addRecord() {
     if (!value.trim()) {
@@ -132,7 +142,7 @@ export default function HealthScreen() {
       setNotes('');
       setMessage('Health record saved.');
 
-      await loadHealth();
+      await loadHealth(true);
     } catch (error) {
       console.error('Health record:', error);
       setMessage('Could not save the health record.');
@@ -144,7 +154,7 @@ export default function HealthScreen() {
   async function deleteRecord(recordId: number) {
     try {
       await deleteHealthRecord(recordId);
-      await loadHealth();
+      await loadHealth(true);
     } catch (error) {
       console.error('Delete health record:', error);
     }
@@ -173,6 +183,22 @@ export default function HealthScreen() {
 
         {loading ? (
           <ActivityIndicator style={styles.loader} />
+        ) : error ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Couldn't load health data</Text>
+            <Text style={styles.errorMessage}>
+              Check your connection and try again.
+            </Text>
+            <Pressable
+              onPress={() => loadHealth(true)}
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
         ) : (
           <>
             <View style={styles.dateCard}>
@@ -800,5 +826,44 @@ const styles = StyleSheet.create({
     color: '#7F8794',
     padding: 20,
     fontSize: 14,
+  },
+
+  errorCard: {
+    backgroundColor: '#15181D',
+    borderWidth: 1,
+    borderColor: '#3A2430',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+  },
+
+  errorTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  errorMessage: {
+    color: '#929AA6',
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    minHeight: 40,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  retryButtonText: {
+    color: '#0B0D10',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

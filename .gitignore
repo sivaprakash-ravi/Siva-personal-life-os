@@ -221,3 +221,6 @@ __marimo__/
 *.db
 *.sqlite
 *.sqlite3
+
+# SIVA OS database backups (never commit personal/user data)
+backups/

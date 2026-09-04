@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -57,6 +58,9 @@ export default function NutritionScreen() {
   const [saving, setSaving] =
     useState(false);
 
+  const [error, setError] =
+    useState(false);
+
   const [mealType, setMealType] =
     useState('breakfast');
 
@@ -78,36 +82,47 @@ export default function NutritionScreen() {
   const [message, setMessage] =
     useState('');
 
-  async function loadNutrition() {
-    try {
-      const [
-        summary,
-        todayMeals,
-      ] = await Promise.all([
-        getNutrition(),
-        getTodayMeals(),
-      ]);
+  const loadNutrition = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setLoading(true);
+      setError(false);
+      try {
+        const [
+          summary,
+          todayMeals,
+        ] = await Promise.all([
+          getNutrition(),
+          getTodayMeals(),
+        ]);
 
-      setData(
-        summary as NutritionData,
-      );
+        setData(
+          summary as NutritionData,
+        );
 
-      setMeals(
-        todayMeals as Meal[],
-      );
-    } catch (error) {
-      console.error(
-        'Nutrition API:',
-        error,
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+        setMeals(
+          todayMeals as Meal[],
+        );
+      } catch (error) {
+        console.error(
+          'Nutrition API:',
+          error,
+        );
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
-  useEffect(() => {
-    loadNutrition();
-  }, []);
+  const initialFocusDone = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      const first = !initialFocusDone.current;
+      initialFocusDone.current = true;
+      loadNutrition(first);
+    }, [loadNutrition]),
+  );
 
   async function addMeal() {
     if (!description.trim()) {
@@ -129,12 +144,26 @@ export default function NutritionScreen() {
 
     if (
       (caloriesValue !== null &&
-        Number.isNaN(caloriesValue)) ||
+        (Number.isNaN(caloriesValue) ||
+          caloriesValue < 0)) ||
       (proteinValue !== null &&
-        Number.isNaN(proteinValue))
+        (Number.isNaN(proteinValue) ||
+          proteinValue < 0))
     ) {
       setMessage(
-        'Calories and protein must be numbers.',
+        'Calories and protein must be valid numbers.',
+      );
+      return;
+    }
+
+    if (
+      caloriesValue !== null &&
+      caloriesValue === 0 &&
+      proteinValue !== null &&
+      proteinValue === 0
+    ) {
+      setMessage(
+        'Enter a calorie or protein amount.',
       );
       return;
     }
@@ -165,7 +194,7 @@ export default function NutritionScreen() {
         'Meal saved.',
       );
 
-      await loadNutrition();
+      await loadNutrition(true);
     } catch (error) {
       console.error(
         'Meal API:',
@@ -188,7 +217,7 @@ export default function NutritionScreen() {
         mealId,
       );
 
-      await loadNutrition();
+      await loadNutrition(true);
     } catch (error) {
       console.error(
         'Delete meal:',
@@ -231,6 +260,36 @@ export default function NutritionScreen() {
           <ActivityIndicator
             style={styles.loader}
           />
+        ) : error ? (
+          <View
+            style={styles.errorCard}
+          >
+            <Text
+              style={styles.errorTitle}
+            >
+              Couldn't load nutrition data
+            </Text>
+
+            <Text
+              style={styles.errorMessage}
+            >
+              Check your connection and try again.
+            </Text>
+
+            <Pressable
+              onPress={() =>
+                loadNutrition(true)
+              }
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.retryText}>
+                Retry
+              </Text>
+            </Pressable>
+          </View>
         ) : (
           <>
             <View
@@ -859,5 +918,44 @@ const styles = StyleSheet.create({
   delete: {
     color: '#8E959F',
     fontSize: 11,
+  },
+
+  errorCard: {
+    backgroundColor: '#15181D',
+    borderWidth: 1,
+    borderColor: '#3A2430',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+  },
+
+  errorTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  errorMessage: {
+    color: '#929AA6',
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    minHeight: 40,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  retryText: {
+    color: '#0B0D10',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

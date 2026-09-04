@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -97,6 +98,9 @@ export default function FinanceScreen() {
   const [saving, setSaving] =
     useState(false);
 
+  const [error, setError] =
+    useState(false);
+
   const [category, setCategory] =
     useState('food');
 
@@ -118,54 +122,65 @@ export default function FinanceScreen() {
   const [message, setMessage] =
     useState('');
 
-  async function loadFinance() {
-    try {
-      const [
-        dailyData,
-        monthlyData,
-        totalData,
-        insightData,
-        expenseData,
-      ] = await Promise.all([
-        getFinanceDaily(),
-        getFinanceMonthly(),
-        getFinanceTotal(),
-        getFinanceInsights(),
-        getTodayExpenses(),
-      ]);
+  const loadFinance = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setLoading(true);
+      setError(false);
+      try {
+        const [
+          dailyData,
+          monthlyData,
+          totalData,
+          insightData,
+          expenseData,
+        ] = await Promise.all([
+          getFinanceDaily(),
+          getFinanceMonthly(),
+          getFinanceTotal(),
+          getFinanceInsights(),
+          getTodayExpenses(),
+        ]);
 
-      setDaily(
-        dailyData as DailyFinance,
-      );
+        setDaily(
+          dailyData as DailyFinance,
+        );
 
-      setMonthly(
-        monthlyData as MonthlyFinance,
-      );
+        setMonthly(
+          monthlyData as MonthlyFinance,
+        );
 
-      setTotal(
-        totalData as MonthlyTotal,
-      );
+        setTotal(
+          totalData as MonthlyTotal,
+        );
 
-      setInsights(
-        insightData as FinanceInsights,
-      );
+        setInsights(
+          insightData as FinanceInsights,
+        );
 
-      setExpenses(
-        expenseData as Expense[],
-      );
-    } catch (error) {
-      console.error(
-        'Finance API:',
-        error,
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+        setExpenses(
+          expenseData as Expense[],
+        );
+      } catch (error) {
+        console.error(
+          'Finance API:',
+          error,
+        );
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
-  useEffect(() => {
-    loadFinance();
-  }, []);
+  const initialFocusDone = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      const first = !initialFocusDone.current;
+      initialFocusDone.current = true;
+      loadFinance(first);
+    }, [loadFinance]),
+  );
 
   async function addExpense() {
     if (!amount.trim()) {
@@ -215,7 +230,7 @@ export default function FinanceScreen() {
         'Expense recorded.',
       );
 
-      await loadFinance();
+      await loadFinance(true);
     } catch (error) {
       console.error(
         'Expense API:',
@@ -238,7 +253,7 @@ export default function FinanceScreen() {
         expenseId,
       );
 
-      await loadFinance();
+      await loadFinance(true);
     } catch (error) {
       console.error(
         'Delete expense:',
@@ -286,6 +301,30 @@ export default function FinanceScreen() {
           <ActivityIndicator
             style={styles.loader}
           />
+        ) : error ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>
+              Couldn't load finance data
+            </Text>
+
+            <Text style={styles.errorMessage}>
+              Check your connection and try again.
+            </Text>
+
+            <Pressable
+              onPress={() =>
+                loadFinance(true)
+              }
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.retryButtonText}>
+                Retry
+              </Text>
+            </Pressable>
+          </View>
         ) : (
           <>
             <View
@@ -1223,5 +1262,44 @@ const styles = StyleSheet.create({
     color: '#7F8794',
     padding: 20,
     fontSize: 14,
+  },
+
+  errorCard: {
+    backgroundColor: '#15181D',
+    borderWidth: 1,
+    borderColor: '#3A2430',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+  },
+
+  errorTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  errorMessage: {
+    color: '#929AA6',
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    minHeight: 40,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  retryButtonText: {
+    color: '#0B0D10',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

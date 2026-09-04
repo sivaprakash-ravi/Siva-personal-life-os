@@ -20,6 +20,18 @@ def record_meal(
     protein_grams=None,
     notes=None,
 ):
+    if not description or not description.strip():
+        raise ValueError("Meal description is required.")
+
+    if calories is not None and calories < 0:
+        raise ValueError("Calories must be greater than or equal to 0.")
+
+    if protein_grams is not None and protein_grams < 0:
+        raise ValueError("Protein must be greater than or equal to 0.")
+
+    if not meal_type:
+        raise ValueError("Meal type is required.")
+
     add_meal(
         meal_date=meal_date,
         meal_type=meal_type,

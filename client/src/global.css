@@ -7,3 +7,22 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* ---- SIVA OS desktop sidebar ---- */
+.siva-nav-item {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+  text-decoration: none;
+}
+.siva-nav-item:hover {
+  background-color: rgba(91, 140, 255, 0.1);
+}
+body {
+  margin: 0;
+}
+html,
+body,
+#root {
+  height: 100%;
+}

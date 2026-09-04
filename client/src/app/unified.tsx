@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import {
+  useCallback,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+import { getUnified } from '../services/api';
 
 type UnifiedData = {
   date: string;
@@ -34,20 +40,29 @@ type UnifiedData = {
 export default function UnifiedScreen() {
   const [data, setData] = useState<UnifiedData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/api/v1/unified`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        return response.json();
-      })
-      .then(setData)
-      .catch((error) => console.error('Unified API:', error))
-      .finally(() => setLoading(false));
+  const loadUnified = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    setError(false);
+    try {
+      setData(await getUnified<UnifiedData>());
+    } catch (loadError) {
+      console.error('Unified API:', loadError);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  const initialFocusDone = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      const first = !initialFocusDone.current;
+      initialFocusDone.current = true;
+      loadUnified(first);
+    }, [loadUnified]),
+  );
 
   const life = data?.daily_life;
 
@@ -64,6 +79,24 @@ export default function UnifiedScreen() {
 
         {loading ? (
           <ActivityIndicator style={styles.loader} />
+        ) : error ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>
+              Couldn't load your life overview
+            </Text>
+            <Text style={styles.errorMessage}>
+              Check your connection and try again.
+            </Text>
+            <Pressable
+              onPress={() => loadUnified(true)}
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          </View>
         ) : (
           <>
             <View style={styles.dateCard}>
@@ -488,5 +521,48 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     marginTop: 7,
+  },
+
+  pressed: {
+    opacity: 0.7,
+  },
+
+  errorCard: {
+    backgroundColor: '#15181D',
+    borderWidth: 1,
+    borderColor: '#3A2430',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+  },
+
+  errorTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  errorMessage: {
+    color: '#929AA6',
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    minHeight: 40,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  retryText: {
+    color: '#0B0D10',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

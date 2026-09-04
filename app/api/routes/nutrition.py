@@ -91,15 +91,21 @@ def today_meals():
 def create_meal(request: MealRequest):
     meal_date = request.meal_date or date.today().isoformat()
 
-    record_meal(
-        meal_date=meal_date,
-        meal_type=request.meal_type,
-        meal_time=request.meal_time,
-        description=request.description,
-        calories=request.calories,
-        protein_grams=request.protein_grams,
-        notes=request.notes,
-    )
+    try:
+        record_meal(
+            meal_date=meal_date,
+            meal_type=request.meal_type,
+            meal_time=request.meal_time,
+            description=request.description,
+            calories=request.calories,
+            protein_grams=request.protein_grams,
+            notes=request.notes,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
 
     return {
         "status": "recorded",

@@ -1,8 +1,12 @@
 import sqlite3
 from pathlib import Path
 
+# Anchor the database to the repository root so its location is deterministic
+# regardless of the process working directory (important for deployments where
+# uvicorn may be launched from a different directory than the repo root).
+APP_ROOT = Path(__file__).resolve().parent.parent.parent
 
-DATABASE_DIR = Path("data")
+DATABASE_DIR = APP_ROOT / "data"
 DATABASE_DIR.mkdir(exist_ok=True)
 
 DATABASE_PATH = DATABASE_DIR / "personal_life.db"

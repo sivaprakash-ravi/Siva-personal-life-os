@@ -1,20 +1,56 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrandHeader } from '@/components/brand';
 import {
-  getDailySummary,
-  getTodayCheckins,
+  CommandCenter,
+  FinancePanel,
+  GlanceCard,
+  HealthPanel,
+  HeroCarousel,
+  KpiGrid,
+  NutritionPanel,
+  QuickActions,
+  SectionPanel,
+  WeeklySummaryPanel,
+  type WeeklyDay,
+} from '@/components/dashboard';
+import {
+  DashboardCard,
+  EmptyState,
+} from '@/components/ui/dashboard';
+import { ThemedText } from '@/components/themed-text';
+import {
+  HERO_AUTO_SCROLL_INTERVAL_MS,
+  HERO_BRAND,
+  HERO_SLIDES,
+} from '@/constants/hero';
+import { FontSize, FontWeight, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import {
   completeCheckin,
+  getDailySummary,
+  getFinanceCategories,
+  getFinanceDaily,
+  getHealthProgress,
+  getNutritionProgress,
+  getRecurringDashboard,
+  getTodayCheckins,
+  getWeeklyDailySummary,
   undoCheckin,
 } from '../services/api';
+
+/* ---------------------------------------------------------------------------
+ * API response types
+ * ---------------------------------------------------------------------- */
 
 type DailySummary = {
   date: string;
@@ -23,6 +59,18 @@ type DailySummary = {
   pending: number;
   missed: number;
   completion_rate: number;
+};
+
+type WeeklySummary = {
+  start_date: string;
+  end_date: string;
+  total: number;
+  completed: number;
+  pending: number;
+  missed: number;
+  completion_rate: number;
+  current_streak: number;
+  daily_summaries: WeeklyDay[];
 };
 
 type CheckIn = {
@@ -35,711 +83,603 @@ type CheckIn = {
   notes: string | null;
 };
 
-export default function TodayScreen() {
-  const [summary, setSummary] =
-    useState<DailySummary | null>(null);
+type HealthProgress = {
+  date: string;
+  progress: {
+    steps: number;
+    steps_target: number;
+    steps_percentage: number;
+    water_ml: number;
+    water_target: number;
+    water_percentage: number;
+    exercise_minutes: number;
+    exercise_target: number;
+    exercise_percentage: number;
+    sleep_hours: number | null;
+    sleep_target: number;
+    sleep_percentage: number;
+  };
+};
 
-  const [checkins, setCheckins] =
-    useState<CheckIn[]>([]);
+type NutritionProgress = {
+  date: string;
+  calories: number;
+  calorie_target: number;
+  calorie_percentage: number;
+  protein_grams: number;
+  protein_target: number;
+  protein_percentage: number;
+  meals_completed: number;
+  meals_expected: number;
+  meal_completion_rate: number;
+};
 
-  const [loading, setLoading] =
-    useState(true);
+type FinanceDaily = {
+  date: string;
+  expense_count: number;
+  total_amount: number;
+};
 
-  const [updatingId, setUpdatingId] =
-    useState<number | null>(null);
+type FinanceCategories = {
+  categories: {
+    category: string;
+    total_amount: number;
+    expense_count: number;
+  }[];
+};
 
-  const loadToday = useCallback(async () => {
+type RecurringItem = {
+  id: number;
+  name: string;
+  category: string;
+  expected_amount: number;
+  frequency: string;
+  next_expected_date: string | null;
+  status: string;
+  active: boolean;
+};
+
+/* ---------------------------------------------------------------------------
+ * Helpers
+ * ---------------------------------------------------------------------- */
+
+function formatLabel(value: string) {
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function badgeTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  if (status.includes('overdue')) return 'danger';
+  if (status.includes('due')) return 'warning';
+  if (status.includes('upcoming') || status.includes('awaiting')) return 'neutral';
+  if (status.includes('renewed')) return 'success';
+  return 'neutral';
+}
+
+function formatAmount(value: number) {
+  return Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
+/* ---------------------------------------------------------------------------
+ * Main dashboard
+ * ---------------------------------------------------------------------- */
+
+export default function DashboardScreen() {
+  const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+  const glanceColumns = width >= 1024 ? 4 : 2;
+
+  const [summary, setSummary] = useState<DailySummary | null>(null);
+  const [checkins, setCheckins] = useState<CheckIn[]>([]);
+  const [weekly, setWeekly] = useState<WeeklySummary | null>(null);
+  const [health, setHealth] = useState<HealthProgress | null>(null);
+  const [nutrition, setNutrition] = useState<NutritionProgress | null>(null);
+  const [financeDaily, setFinanceDaily] = useState<FinanceDaily | null>(null);
+  const [categories, setCategories] = useState<FinanceCategories | null>(null);
+  const [recurring, setRecurring] = useState<RecurringItem[]>([]);
+
+  const [loadingDaily, setLoadingDaily] = useState(true);
+  const [loadingWeekly, setLoadingWeekly] = useState(true);
+  const [loadingHealth, setLoadingHealth] = useState(true);
+  const [loadingNutrition, setLoadingNutrition] = useState(true);
+  const [loadingFinance, setLoadingFinance] = useState(true);
+  const [loadingRecurring, setLoadingRecurring] = useState(true);
+
+  const [dailyError, setDailyError] = useState(false);
+  const [weeklyError, setWeeklyError] = useState(false);
+  const [healthError, setHealthError] = useState(false);
+  const [nutritionError, setNutritionError] = useState(false);
+  const [financeError, setFinanceError] = useState(false);
+  const [recurringError, setRecurringError] = useState(false);
+
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  const loadDaily = useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingDaily(true);
+    setDailyError(false);
     try {
-      const [summaryData, checkinsData] =
-        await Promise.all([
-          getDailySummary(),
-          getTodayCheckins(),
-        ]);
-
-      setSummary(
-        summaryData as DailySummary,
-      );
-
-      const normalizedCheckins =
-        Array.isArray(checkinsData)
-          ? checkinsData
-          : (
-              checkinsData as {
-                value?: CheckIn[];
-              }
-            ).value ?? [];
-
-      setCheckins(
-        normalizedCheckins as CheckIn[],
-      );
+      const [summaryData, checkinsData] = await Promise.all([
+        getDailySummary(),
+        getTodayCheckins(),
+      ]);
+      setSummary(summaryData as DailySummary);
+      const normalized = Array.isArray(checkinsData)
+        ? checkinsData
+        : (checkinsData as { value?: CheckIn[] }).value ?? [];
+      setCheckins(normalized as CheckIn[]);
     } catch (error) {
-      console.error(
-        'Today API:',
-        error,
-      );
+      console.error('Dashboard daily:', error);
+      setDailyError(true);
     } finally {
-      setLoading(false);
+      setLoadingDaily(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadToday();
-  }, [loadToday]);
+  const loadWeekly = useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingWeekly(true);
+    setWeeklyError(false);
+    try {
+      const data = (await getWeeklyDailySummary()) as WeeklySummary;
+      setWeekly(data);
+    } catch (error) {
+      console.error('Dashboard weekly:', error);
+      setWeeklyError(true);
+    } finally {
+      setLoadingWeekly(false);
+    }
+  }, []);
 
-  const toggleCheckin = async (
-    checkin: CheckIn,
-  ) => {
+  const loadHealth = useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingHealth(true);
+    setHealthError(false);
+    try {
+      setHealth((await getHealthProgress()) as HealthProgress);
+    } catch (error) {
+      console.error('Dashboard health:', error);
+      setHealthError(true);
+    } finally {
+      setLoadingHealth(false);
+    }
+  }, []);
+
+  const loadNutrition = useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingNutrition(true);
+    setNutritionError(false);
+    try {
+      setNutrition((await getNutritionProgress()) as NutritionProgress);
+    } catch (error) {
+      console.error('Dashboard nutrition:', error);
+      setNutritionError(true);
+    } finally {
+      setLoadingNutrition(false);
+    }
+  }, []);
+
+  const loadFinance = useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingFinance(true);
+    setFinanceError(false);
+    try {
+      const [daily, cats] = await Promise.all([getFinanceDaily(), getFinanceCategories()]);
+      setFinanceDaily(daily as FinanceDaily);
+      setCategories(cats as FinanceCategories);
+    } catch (error) {
+      console.error('Dashboard finance:', error);
+      setFinanceError(true);
+    } finally {
+      setLoadingFinance(false);
+    }
+  }, []);
+
+  const loadRecurring = useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingRecurring(true);
+    setRecurringError(false);
+    try {
+      const data = (await getRecurringDashboard()) as RecurringItem[];
+      setRecurring(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Dashboard recurring:', error);
+      setRecurringError(true);
+    } finally {
+      setLoadingRecurring(false);
+    }
+  }, []);
+
+  const refreshAll = useCallback(async (quiet = false) => {
+    await Promise.all([
+      loadDaily(quiet),
+      loadWeekly(quiet),
+      loadHealth(quiet),
+      loadNutrition(quiet),
+      loadFinance(quiet),
+      loadRecurring(quiet),
+    ]);
+  }, [loadDaily, loadWeekly, loadHealth, loadNutrition, loadFinance, loadRecurring]);
+
+  // Initial load shows spinners; every subsequent focus refresh is quiet so the
+  // UI stays stable while synchronizing with other screens/mutations.
+  const initialFocusDone = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      const first = !initialFocusDone.current;
+      initialFocusDone.current = true;
+      refreshAll(first);
+    }, [refreshAll]),
+  );
+
+  const toggleCheckin = async (checkin: CheckIn) => {
     try {
       setUpdatingId(checkin.id);
-
-      if (
-        checkin.status === 'completed'
-      ) {
+      if (checkin.status === 'completed') {
         await undoCheckin(checkin.id);
       } else {
-        await completeCheckin(
-          checkin.id,
-        );
+        await completeCheckin(checkin.id);
       }
-
-      await loadToday();
+      await loadDaily(true);
+      await loadWeekly(true);
     } catch (error) {
-      console.error(
-        'Check-in update:',
-        error,
-      );
+      console.error('Check-in update:', error);
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const completionRate =
-    summary?.completion_rate ?? 0;
+  const completionRate = summary?.completion_rate ?? 0;
+  const healthProgress = health?.progress;
+  const categoriesList = categories?.categories ?? [];
+  const pendingCheckin = checkins.find((c) => c.status === 'pending');
+  const recentCheckins = checkins.filter(
+    (c) => c.status === 'completed' || c.status === 'missed',
+  );
 
   return (
     <SafeAreaView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.background }]}
       edges={['top', 'bottom']}
     >
       <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>
-              PERSONAL LIFE OS
-            </Text>
-
-            <Text style={styles.logo}>
-              Siva OS
-            </Text>
-
-            <Text style={styles.tagline}>
-              Your life, in one place.
-            </Text>
+        <View style={[styles.content, isWide && styles.contentWide]}>
+          {/* -----------------------------------------------------------------
+           * SIVA OS brand + Hero carousel + Command Center
+           * --------------------------------------------------------------- */}
+          <View style={styles.heroArea}>
+            <BrandHeader connected={!dailyError} showTagline={isWide} />
+            <View style={styles.heroGap}>
+              <HeroCarousel
+                slides={HERO_SLIDES}
+                brand={HERO_BRAND}
+                intervalMs={HERO_AUTO_SCROLL_INTERVAL_MS}
+              />
+            </View>
           </View>
 
-          <View
-            style={styles.onlineBadge}
-          >
-            <View
-              style={styles.onlineDot}
-            />
+          <View style={styles.section}>
+            {loadingDaily ? (
+              <DashboardCard>
+                <ActivityIndicator color={theme.accent} />
+              </DashboardCard>
+            ) : dailyError ? (
+              <DashboardCard>
+                <EmptyState
+                  title="Couldn't load today"
+                  message="Check your connection and try again."
+                />
+              </DashboardCard>
+            ) : (
+              <CommandCenter
+                date={summary?.date}
+                connected={!dailyError}
+                completionRate={Math.round(completionRate)}
+                completed={summary?.completed ?? 0}
+                pending={summary?.pending ?? 0}
+                missed={summary?.missed ?? 0}
+                total={summary?.total ?? 0}
+              />
+            )}
+          </View>
 
-            <Text
-              style={styles.onlineText}
+          {/* -----------------------------------------------------------------
+           * Today at a glance — colour-coded KPI cards
+           * --------------------------------------------------------------- */}
+          <View style={styles.section}>
+            <ThemedText style={[styles.eyebrow, { color: theme.textMuted }]}>
+              TODAY AT A GLANCE
+            </ThemedText>
+            <KpiGrid columns={glanceColumns}>
+              <GlanceCard
+                label="Daily"
+                glyph="⚡"
+                value={`${Math.round(completionRate)}%`}
+                context={
+                  summary?.total
+                    ? `${summary.completed}/${summary.total} tasks done`
+                    : 'No tasks'
+                }
+                progress={completionRate}
+                tone="info"
+              />
+              <GlanceCard
+                label="Health"
+                glyph="💚"
+                value={healthProgress ? `${healthProgress.steps.toLocaleString()}` : '0'}
+                unit="steps"
+                context={
+                  healthProgress && healthProgress.steps_target
+                    ? `${Math.round(healthProgress.steps_percentage)}% of target`
+                    : undefined
+                }
+                progress={healthProgress?.steps_percentage ?? 0}
+                tone="success"
+              />
+              <GlanceCard
+                label="Nutrition"
+                glyph="🔥"
+                value={nutrition ? `${nutrition.calories.toLocaleString()}` : '0'}
+                unit="kcal"
+                context={
+                  nutrition
+                    ? `${Math.round(nutrition.calorie_percentage)}% of target`
+                    : undefined
+                }
+                progress={nutrition?.calorie_percentage ?? 0}
+                tone="warning"
+              />
+              <GlanceCard
+                label="Spending"
+                glyph="₹"
+                value={
+                  financeDaily
+                    ? `₹${formatAmount(financeDaily.total_amount)}`
+                    : '₹0'
+                }
+                unit="today"
+                context={
+                  financeDaily?.expense_count
+                    ? `${financeDaily.expense_count} expenses`
+                    : 'No spending'
+                }
+                progress={0}
+                tone="danger"
+              />
+            </KpiGrid>
+          </View>
+
+          {/* -----------------------------------------------------------------
+           * Data visualisation grid
+           * --------------------------------------------------------------- */}
+
+          {/* Daily / Weekly + Health — side-by-side on wide screens */}
+          <View style={[isWide && styles.gridRow]}>
+            <View style={[styles.section, isWide && styles.gridItemHalf]}>
+              <SectionPanel
+                title="Daily progress"
+                eyebrow="LAST 7 DAYS"
+                loading={loadingWeekly}
+                error={weeklyError}
+                showEmpty={!!weekly && weekly.daily_summaries.length === 0}
+                emptyTitle="No weekly data yet"
+                emptyMessage="Complete check-ins across the week to see your progress."
+                onRetry={loadWeekly}
+              >
+                {weekly && weekly.daily_summaries.length > 0 ? (
+                  <WeeklySummaryPanel data={weekly} todayDate={summary?.date} />
+                ) : null}
+              </SectionPanel>
+            </View>
+
+            <View style={[styles.section, isWide && styles.gridItemHalf]}>
+              <SectionPanel
+                title="Health"
+                eyebrow="TODAY"
+                loading={loadingHealth}
+                error={healthError}
+                showEmpty={
+                  !!healthProgress &&
+                  healthProgress.steps === 0 &&
+                  healthProgress.water_ml === 0 &&
+                  healthProgress.exercise_minutes === 0
+                }
+                emptyTitle="No health data today"
+                emptyMessage="Record steps, water or exercise from the Health screen."
+                onRetry={loadHealth}
+              >
+                {healthProgress ? <HealthPanel data={healthProgress} /> : null}
+              </SectionPanel>
+            </View>
+          </View>
+
+          {/* Nutrition + Spending — side-by-side on wide screens */}
+          <View style={[isWide && styles.gridRow]}>
+            <View style={[styles.section, isWide && styles.gridItemHalf]}>
+              <SectionPanel
+                title="Nutrition"
+                eyebrow="TODAY"
+                loading={loadingNutrition}
+                error={nutritionError}
+                showEmpty={
+                  !!nutrition &&
+                  nutrition.calories === 0 &&
+                  nutrition.meals_completed === 0
+                }
+                emptyTitle="No meals recorded"
+                emptyMessage="Add a meal from the Nutrition screen."
+                onRetry={loadNutrition}
+              >
+                {nutrition ? <NutritionPanel data={nutrition} /> : null}
+              </SectionPanel>
+            </View>
+
+            <View style={[styles.section, isWide && styles.gridItemHalf]}>
+              <SectionPanel
+                title="Finance"
+                eyebrow="TODAY"
+                loading={loadingFinance}
+                error={financeError}
+                showEmpty={
+                  !!financeDaily && financeDaily.total_amount === 0
+                }
+                emptyTitle="No spending today"
+                emptyMessage="Record expenses from the Finance screen."
+                onRetry={loadFinance}
+              >
+                <FinancePanel
+                  totalToday={financeDaily?.total_amount ?? 0}
+                  expenseCount={financeDaily?.expense_count ?? 0}
+                  categories={categoriesList}
+                />
+              </SectionPanel>
+            </View>
+          </View>
+
+          {/* -----------------------------------------------------------------
+           * Quick actions
+           * --------------------------------------------------------------- */}
+          <View style={styles.section}>
+            <QuickActions
+              actions={[
+                {
+                  key: 'checkin',
+                  label: 'Complete check-in',
+                  hint: pendingCheckin ? formatLabel(pendingCheckin.type) : 'All done',
+                  onPress: pendingCheckin ? () => toggleCheckin(pendingCheckin) : undefined,
+                  loading: updatingId !== null,
+                },
+                { key: 'health', label: 'Add health record', hint: 'Track a metric', href: '/health' },
+                { key: 'nutrition', label: 'Add meal', hint: 'Log calories', href: '/nutrition' },
+                { key: 'finance', label: 'Add expense', hint: 'Record spending', href: '/finance' },
+              ]}
+            />
+          </View>
+
+          {/* -----------------------------------------------------------------
+           * Recent activity
+           * --------------------------------------------------------------- */}
+          <View style={styles.section}>
+            <SectionPanel
+              title="Recent activity"
+              eyebrow="TODAY"
+              loading={loadingDaily}
+              error={dailyError}
+              showEmpty={recentCheckins.length === 0}
+              emptyTitle="No activity yet"
+              emptyMessage="Your completed check-ins will appear here."
+              onRetry={loadDaily}
             >
-              ONLINE
-            </Text>
+              <DashboardCard>
+                {recentCheckins.length === 0 ? (
+                  <EmptyState
+                    title="No activity yet"
+                    message="Your completed tasks will show up here."
+                  />
+                ) : (
+                  recentCheckins.map((checkin) => (
+                    <View
+                      key={checkin.id}
+                      style={[styles.activityRow, { borderBottomColor: theme.border }]}
+                    >
+                      <View
+                        style={[
+                          styles.activityDot,
+                          {
+                            backgroundColor:
+                              checkin.status === 'completed'
+                                ? theme.success
+                                : theme.danger,
+                          },
+                        ]}
+                      />
+                      <View style={styles.activityInfo}>
+                        <ThemedText style={styles.activityTitle}>
+                          {formatLabel(checkin.type)}
+                        </ThemedText>
+                        <ThemedText style={styles.activityMeta} themeColor="textSecondary">
+                          {checkin.status === 'completed' ? 'Completed' : 'Missed'} •{' '}
+                          {checkin.scheduled_time}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </DashboardCard>
+            </SectionPanel>
           </View>
         </View>
-
-        <Text
-          style={styles.sectionTitle}
-        >
-          Today
-        </Text>
-
-        {loading ? (
-          <ActivityIndicator
-            size="large"
-            style={styles.loader}
-          />
-        ) : (
-          <>
-            <View
-              style={styles.completionCard}
-            >
-              <View
-                style={
-                  styles.completionHeader
-                }
-              >
-                <Text
-                  style={styles.cardEyebrow}
-                >
-                  DAILY COMPLETION
-                </Text>
-
-                <Text
-                  style={styles.dateText}
-                >
-                  {summary?.date ?? ''}
-                </Text>
-              </View>
-
-              <Text
-                style={
-                  styles.completionValue
-                }
-              >
-                {Math.round(
-                  completionRate,
-                )}
-                %
-              </Text>
-
-              <View
-                style={
-                  styles.progressTrack
-                }
-              >
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.min(
-                        Math.max(
-                          completionRate,
-                          0,
-                        ),
-                        100,
-                      )}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-
-            <View
-              style={styles.summaryGrid}
-            >
-              <SummaryCard
-                title="Completed"
-                value={
-                  summary?.completed ?? 0
-                }
-              />
-
-              <SummaryCard
-                title="Pending"
-                value={
-                  summary?.pending ?? 0
-                }
-              />
-
-              <SummaryCard
-                title="Missed"
-                value={
-                  summary?.missed ?? 0
-                }
-              />
-
-              <SummaryCard
-                title="Total"
-                value={
-                  summary?.total ?? 0
-                }
-              />
-            </View>
-
-            <View
-              style={styles.focusCard}
-            >
-              <Text
-                style={styles.cardEyebrow}
-              >
-                TODAY'S FOCUS
-              </Text>
-
-              <Text
-                style={styles.focusTitle}
-              >
-                {summary?.total
-                  ? 'Keep moving.'
-                  : 'Build the day.'}
-              </Text>
-
-              <Text
-                style={styles.focusText}
-              >
-                Complete your planned
-                check-ins and let Siva OS
-                track the progress.
-              </Text>
-            </View>
-
-            <View
-              style={styles.sectionHeader}
-            >
-              <Text
-                style={styles.sectionTitle}
-              >
-                Check-ins
-              </Text>
-
-              <Text
-                style={styles.countText}
-              >
-                {checkins.length} today
-              </Text>
-            </View>
-
-            {checkins.length === 0 ? (
-              <View
-                style={styles.emptyCard}
-              >
-                <Text
-                  style={styles.emptyTitle}
-                >
-                  No check-ins for today
-                </Text>
-
-                <Text
-                  style={styles.emptyText}
-                >
-                  Your daily schedule is
-                  ready to be connected.
-                </Text>
-              </View>
-            ) : (
-              checkins.map(
-                (checkin) => (
-                  <CheckInCard
-                    key={checkin.id}
-                    checkin={checkin}
-                    updating={
-                      updatingId ===
-                      checkin.id
-                    }
-                    onPress={() =>
-                      toggleCheckin(
-                        checkin,
-                      )
-                    }
-                  />
-                ),
-              )
-            )}
-          </>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SummaryCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: number;
-}) {
-  return (
-    <View
-      style={styles.summaryCard}
-    >
-      <Text
-        style={styles.summaryTitle}
-      >
-        {title}
-      </Text>
-
-      <Text
-        style={styles.summaryValue}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function CheckInCard({
-  checkin,
-  updating,
-  onPress,
-}: {
-  checkin: CheckIn;
-  updating: boolean;
-  onPress: () => void;
-}) {
-  const completed =
-    checkin.status ===
-    'completed';
-
-  const missed =
-    checkin.status === 'missed';
-
-  const displayType =
-    checkin.type
-      .charAt(0)
-      .toUpperCase() +
-    checkin.type.slice(1);
-
-  return (
-    <View
-      style={[
-        styles.checkinCard,
-        completed &&
-          styles.checkinCompleted,
-      ]}
-    >
-      <View
-        style={styles.checkinInfo}
-      >
-        <Text
-          style={[
-            styles.checkinTitle,
-            completed &&
-              styles.completedText,
-          ]}
-        >
-          {displayType}
-        </Text>
-
-        <Text
-          style={styles.checkinTime}
-        >
-          Scheduled{' '}
-          {checkin.scheduled_time}
-        </Text>
-
-        {missed && (
-          <Text
-            style={styles.missedText}
-          >
-            Missed
-          </Text>
-        )}
-      </View>
-
-      <Pressable
-        onPress={onPress}
-        disabled={
-          updating || missed
-        }
-        style={({ pressed }) => [
-          styles.actionButton,
-          completed &&
-            styles.undoButton,
-          pressed &&
-            styles.buttonPressed,
-          (updating || missed) &&
-            styles.buttonDisabled,
-        ]}
-      >
-        {updating ? (
-          <ActivityIndicator
-            size="small"
-            color="#FFFFFF"
-          />
-        ) : (
-          <Text
-            style={
-              styles.actionButtonText
-            }
-          >
-            {completed
-              ? 'Undo'
-              : 'Complete'}
-          </Text>
-        )}
-      </Pressable>
-    </View>
-  );
-}
+/* ---------------------------------------------------------------------------
+ * Styles
+ * ---------------------------------------------------------------------- */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0D10',
   },
-
+  scrollContent: {
+    paddingBottom: 56,
+  },
   content: {
-    paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: 40,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
   },
-
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 34,
+  contentWide: {
+    maxWidth: 1440,
   },
-
+  heroArea: {
+    marginBottom: Spacing.three,
+  },
+  heroGap: {
+    marginTop: Spacing.three,
+  },
+  section: {
+    marginTop: Spacing.four,
+  },
   eyebrow: {
-    color: '#7F8794',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
+    fontSize: FontSize.tiny,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.three,
   },
-
-  logo: {
-    color: '#FFFFFF',
-    fontSize: 38,
-    fontWeight: '800',
-    marginTop: 7,
-  },
-
-  tagline: {
-    color: '#929AA6',
-    fontSize: 15,
-    marginTop: 5,
-  },
-
-  onlineBadge: {
+  gridRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#15181D',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 2,
+    gap: Spacing.three,
+    flexWrap: 'wrap',
   },
-
-  onlineDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#35D07F',
-    marginRight: 7,
-  },
-
-  onlineText: {
-    color: '#AEB6C2',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 14,
-  },
-
-  loader: {
-    marginTop: 40,
-  },
-
-  completionCard: {
-    backgroundColor: '#15181D',
-    borderWidth: 1,
-    borderColor: '#242830',
-    borderRadius: 18,
-    padding: 22,
-    marginBottom: 14,
-  },
-
-  completionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  cardEyebrow: {
-    color: '#7F8794',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-  },
-
-  dateText: {
-    color: '#929AA6',
-    fontSize: 12,
-  },
-
-  completionValue: {
-    color: '#FFFFFF',
-    fontSize: 38,
-    fontWeight: '800',
-    marginTop: 14,
-  },
-
-  progressTrack: {
-    height: 7,
-    backgroundColor: '#242830',
-    borderRadius: 5,
-    overflow: 'hidden',
-    marginTop: 18,
-  },
-
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 5,
-  },
-
-  summaryGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-
-  summaryCard: {
+  gridItemHalf: {
     flex: 1,
-    minHeight: 92,
-    backgroundColor: '#15181D',
-    borderWidth: 1,
-    borderColor: '#242830',
-    borderRadius: 16,
-    padding: 15,
+    minWidth: 300,
   },
-
-  summaryTitle: {
-    color: '#929AA6',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  summaryValue: {
-    color: '#FFFFFF',
-    fontSize: 27,
-    fontWeight: '800',
-    marginTop: 9,
-  },
-
-  focusCard: {
-    backgroundColor: '#181B21',
-    borderWidth: 1,
-    borderColor: '#292E37',
-    borderRadius: 18,
-    padding: 22,
-    marginBottom: 30,
-  },
-
-  focusTitle: {
-    color: '#FFFFFF',
-    fontSize: 25,
-    fontWeight: '800',
-    marginTop: 12,
-  },
-
-  focusText: {
-    color: '#929AA6',
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 8,
-  },
-
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  countText: {
-    color: '#7F8794',
-    fontSize: 12,
-    marginBottom: 14,
-  },
-
-  checkinCard: {
+  activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#15181D',
-    borderWidth: 1,
-    borderColor: '#242830',
-    borderRadius: 16,
-    padding: 17,
-    marginBottom: 10,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: 1,
+    gap: Spacing.three,
   },
-
-  checkinCompleted: {
-    borderColor: '#3A414C',
-    opacity: 0.75,
+  activityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
   },
-
-  checkinInfo: {
+  activityInfo: {
     flex: 1,
-    marginRight: 14,
   },
-
-  checkinTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+  activityTitle: {
+    fontSize: FontSize.body,
+    fontWeight: FontWeight.bold,
   },
-
-  completedText: {
-    textDecorationLine: 'line-through',
-    color: '#929AA6',
-  },
-
-  checkinTime: {
-    color: '#7F8794',
-    fontSize: 12,
-    marginTop: 5,
-  },
-
-  missedText: {
-    color: '#D47777',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 5,
-  },
-
-  actionButton: {
-    minWidth: 80,
-    height: 38,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-
-  undoButton: {
-    borderColor: '#7F8794',
-  },
-
-  actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  buttonPressed: {
-    opacity: 0.65,
-  },
-
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-
-  emptyCard: {
-    backgroundColor: '#15181D',
-    borderWidth: 1,
-    borderColor: '#242830',
-    borderRadius: 16,
-    padding: 22,
-  },
-
-  emptyTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  emptyText: {
-    color: '#7F8794',
-    fontSize: 13,
-    marginTop: 7,
+  activityMeta: {
+    fontSize: FontSize.small,
+    marginTop: Spacing.half,
   },
 });

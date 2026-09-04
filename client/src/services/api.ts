@@ -1,4 +1,24 @@
-const API_BASE_URL = 'http://192.168.1.9:8000';
+const DEV_API_FALLBACK = 'http://10.58.227.224:8000';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+const API_BASE_URL = (() => {
+  const configured = process.env.EXPO_PUBLIC_API_URL;
+
+  if (configured) {
+    return configured;
+  }
+
+  if (isProduction) {
+    throw new Error(
+      'EXPO_PUBLIC_API_URL is not set. A production build must define a ' +
+        'production API URL; refusing to fall back to the local development server.',
+    );
+  }
+
+  return DEV_API_FALLBACK;
+})();
+
 async function request<T>(
   path: string,
   options?: RequestInit,
@@ -33,6 +53,10 @@ export function getDailySummary() {
   return request('/api/v1/daily');
 }
 
+export function getWeeklyDailySummary() {
+  return request('/api/v1/daily/weekly');
+}
+
 export function getTodayCheckins() {
   return request('/api/v1/daily/checkins');
 }
@@ -65,6 +89,12 @@ export function undoCheckin(
 
 export function getHealth() {
   return request('/api/v1/health');
+}
+
+export function getHealthProgress() {
+  return request(
+    '/api/v1/health/progress',
+  );
 }
 
 export function getTodayHealthRecords() {
@@ -102,6 +132,12 @@ export function deleteHealthRecord(
 
 export function getNutrition() {
   return request('/api/v1/nutrition');
+}
+
+export function getNutritionProgress() {
+  return request(
+    '/api/v1/nutrition/progress',
+  );
 }
 
 export function getTodayMeals() {
@@ -161,6 +197,12 @@ export function getFinanceInsights() {
   );
 }
 
+export function getFinanceCategories() {
+  return request(
+    '/api/v1/finance/categories',
+  );
+}
+
 export function getTodayExpenses() {
   return request(
     '/api/v1/finance/expenses/today',
@@ -211,5 +253,25 @@ export function importSmsTransaction(
       method: 'POST',
       body: JSON.stringify(payload),
     },
+  );
+}
+
+/* -------------------------
+   Recurring
+------------------------- */
+
+export function getRecurringDashboard() {
+  return request(
+    '/api/v1/recurring',
+  );
+}
+
+/* -------------------------
+   Unified
+------------------------- */
+
+export function getUnified<T>() {
+  return request<T>(
+    '/api/v1/unified',
   );
 }
