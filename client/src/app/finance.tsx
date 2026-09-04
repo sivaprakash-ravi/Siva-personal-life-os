@@ -58,11 +58,14 @@ type Expense = {
 const CATEGORIES = [
   'food',
   'transport',
+  'living',
   'shopping',
-  'bills',
+  'personal_care',
   'health',
   'entertainment',
   'education',
+  'financial',
+  'family',
   'travel',
   'other',
 ];
