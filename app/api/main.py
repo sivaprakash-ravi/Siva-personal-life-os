@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,7 @@ from app.api.routes.nutrition import router as nutrition_router
 from app.api.routes.finance import router as finance_router
 from app.api.routes.recurring import router as recurring_router
 from app.api.routes.unified import router as unified_router
+from app.main import initialize_all_databases
 
 # Local development origins (web runs on Expo dev server on port 8081).
 DEFAULT_CORS_ORIGINS = [
@@ -25,10 +27,23 @@ EXTRA_CORS_ORIGINS = [
     if origin.strip()
 ]
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure every required table exists before serving requests. This is the
+    # single startup path used by the production entrypoint
+    # (`uvicorn app.api.main:app`). All initialization functions are idempotent
+    # (CREATE TABLE IF NOT EXISTS / schema checks), so this is safe on an
+    # existing database and required on a completely fresh one.
+    initialize_all_databases()
+    yield
+
+
 app = FastAPI(
     title="Siva OS",
     version="1.0.0",
     description="Siva OS Personal Life Operating System API",
+    lifespan=lifespan,
 )
 
 
