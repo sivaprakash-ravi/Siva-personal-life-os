@@ -18,6 +18,7 @@ import {
   getFinanceInsights,
   getTodayExpenses,
   createExpense,
+  updateExpense,
   deleteExpense,
 } from '../services/api';
 
@@ -125,6 +126,9 @@ export default function FinanceScreen() {
   const [message, setMessage] =
     useState('');
 
+  const [editingId, setEditingId] =
+    useState<number | null>(null);
+
   const loadFinance = useCallback(
     async (quiet = false) => {
       if (!quiet) setLoading(true);
@@ -185,7 +189,7 @@ export default function FinanceScreen() {
     }, [loadFinance]),
   );
 
-  async function addExpense() {
+  async function saveExpense() {
     if (!amount.trim()) {
       setMessage(
         'Enter an amount first.',
@@ -209,29 +213,45 @@ export default function FinanceScreen() {
     setSaving(true);
     setMessage('');
 
+    const payload = {
+      amount: numericAmount,
+      category,
+      description:
+        description.trim() || null,
+      payment_method:
+        paymentMethod,
+      source: 'manual',
+      merchant:
+        merchant.trim() || null,
+      notes:
+        notes.trim() || null,
+    };
+
     try {
-      await createExpense({
-        amount: numericAmount,
-        category,
-        description:
-          description.trim() || null,
-        payment_method:
-          paymentMethod,
-        source: 'manual',
-        merchant:
-          merchant.trim() || null,
-        notes:
-          notes.trim() || null,
-      });
+      if (editingId !== null) {
+        await updateExpense(
+          editingId,
+          payload,
+        );
+
+        setMessage(
+          'Expense updated.',
+        );
+      } else {
+        await createExpense(
+          payload,
+        );
+
+        setMessage(
+          'Expense recorded.',
+        );
+      }
 
       setAmount('');
       setMerchant('');
       setDescription('');
       setNotes('');
-
-      setMessage(
-        'Expense recorded.',
-      );
+      setEditingId(null);
 
       await loadFinance(true);
     } catch (error) {
@@ -246,6 +266,36 @@ export default function FinanceScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleEditExpense(
+    expense: Expense,
+  ) {
+    setEditingId(expense.id);
+    setCategory(expense.category);
+    setAmount(
+      String(expense.amount ?? ''),
+    );
+    setPaymentMethod(
+      expense.payment_method || 'upi',
+    );
+    setMerchant(
+      expense.merchant || '',
+    );
+    setDescription(
+      expense.description || '',
+    );
+    setNotes(expense.notes || '');
+    setMessage('');
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setAmount('');
+    setMerchant('');
+    setDescription('');
+    setNotes('');
+    setMessage('');
   }
 
   async function handleDeleteExpense(
@@ -410,7 +460,9 @@ export default function FinanceScreen() {
             <Text
               style={styles.sectionTitle}
             >
-              Add Expense
+              {editingId !== null
+                ? 'Edit Expense'
+                : 'Add Expense'}
             </Text>
 
             <View
@@ -578,7 +630,7 @@ export default function FinanceScreen() {
               />
 
               <Pressable
-                onPress={addExpense}
+                onPress={saveExpense}
                 disabled={saving}
                 style={({ pressed }) => [
                   styles.saveButton,
@@ -598,10 +650,32 @@ export default function FinanceScreen() {
                       styles.saveButtonText
                     }
                   >
-                    Save Expense
+                    {editingId !== null
+                      ? 'Update Expense'
+                      : 'Save Expense'}
                   </Text>
                 )}
               </Pressable>
+
+              {editingId !== null ? (
+                <Pressable
+                  onPress={cancelEdit}
+                  disabled={saving}
+                  style={({ pressed }) => [
+                    styles.cancelButton,
+                    pressed &&
+                      styles.buttonPressed,
+                  ]}
+                >
+                  <Text
+                    style={
+                      styles.cancelButtonText
+                    }
+                  >
+                    Cancel Edit
+                  </Text>
+                </Pressable>
+              ) : null}
 
               {message ? (
                 <Text
@@ -704,21 +778,43 @@ export default function FinanceScreen() {
                           )}
                         </Text>
 
-                        <Pressable
-                          onPress={() =>
-                            handleDeleteExpense(
-                              expense.id,
-                            )
+                        <View
+                          style={
+                            styles.expenseActions
                           }
                         >
-                          <Text
-                            style={
-                              styles.deleteText
+                          <Pressable
+                            onPress={() =>
+                              handleEditExpense(
+                                expense,
+                              )
                             }
                           >
-                            Delete
-                          </Text>
-                        </Pressable>
+                            <Text
+                              style={
+                                styles.editText
+                              }
+                            >
+                              Edit
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() =>
+                              handleDeleteExpense(
+                                expense.id,
+                              )
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.deleteText
+                              }
+                            >
+                              Delete
+                            </Text>
+                          </Pressable>
+                        </View>
                       </View>
                     </View>
                   ),
@@ -1142,6 +1238,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  cancelButton: {
+    borderWidth: 1,
+    borderColor: '#2A2F37',
+    borderRadius: 11,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+
+  cancelButtonText: {
+    color: '#929AA6',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   buttonPressed: {
     opacity: 0.7,
   },
@@ -1212,10 +1324,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  expenseActions: {
+    flexDirection: 'row',
+    gap: 14,
+    marginTop: 6,
+    alignItems: 'center',
+  },
+
+  editText: {
+    color: '#8E959F',
+    fontSize: 11,
+  },
+
   deleteText: {
     color: '#8E959F',
     fontSize: 11,
-    marginTop: 5,
   },
 
   summaryCard: {

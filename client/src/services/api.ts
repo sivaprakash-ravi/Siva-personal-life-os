@@ -221,6 +221,19 @@ export function createExpense(
   );
 }
 
+export function updateExpense(
+  expenseId: number,
+  expense: Record<string, unknown>,
+) {
+  return request(
+    `/api/v1/finance/expenses/${expenseId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(expense),
+    },
+  );
+}
+
 export function deleteExpense(
   expenseId: number,
 ) {

@@ -131,6 +131,38 @@ def edit_expense(
     transaction_reference=None,
     notes=None,
 ):
+    if amount is None or amount <= 0:
+        raise ValueError(
+            "Expense amount must be greater than 0."
+        )
+
+    if not is_valid_category(category):
+        raise ValueError(
+            f"Invalid expense category: {category}"
+        )
+
+    if subcategory is not None:
+        if not is_valid_subcategory(
+            category,
+            subcategory,
+        ):
+            raise ValueError(
+                f"Invalid subcategory '{subcategory}' "
+                f"for category '{category}'."
+            )
+
+    if source not in VALID_SOURCES:
+        raise ValueError(
+            f"Invalid expense source: {source}. "
+            f"Allowed sources: {sorted(VALID_SOURCES)}"
+        )
+
+    if payment_method not in VALID_PAYMENT_METHODS:
+        raise ValueError(
+            f"Invalid payment method: {payment_method}. "
+            f"Allowed methods: {sorted(VALID_PAYMENT_METHODS)}"
+        )
+
     return update_expense(
         expense_id=expense_id,
         category=category,

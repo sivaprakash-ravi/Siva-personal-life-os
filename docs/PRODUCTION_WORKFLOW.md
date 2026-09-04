@@ -98,11 +98,17 @@ All inserts validate their input (e.g. amount > 0, no negative calories).
 - The file path is anchored to the repository root in
   `app/database/database.py` (`DATABASE_PATH`), so it is the same file no
   matter which directory launches the server.
-- **Important for V1:** the deployed (Railway) filesystem is **ephemeral**.
-  This means new data can be **lost after a deploy/restart** because we are
-  intentionally NOT using persistent storage or Postgres. For the first live
-  V1 this is acceptable; for a permanent deployment you would add a persistent
-  volume or migrate to Postgres later.
+- **V1 (ephemeral):** the deployed (Railway) filesystem was intentionally
+  ephemeral, meaning new data could be lost after a deploy/restart. This was
+  acceptable for the initial live smoke-test deployment only.
+- **V1 persistent (current):** a Railway **persistent volume** is mounted over
+  the repository's `data/` directory (see section 12). Because
+  `DATABASE_PATH` already anchors to `APP_ROOT/data/personal_life.db` (the same
+  path Railway serves), the SQLite file now survives redeploys and restarts
+  with **no code or schema change**. No Postgres migration is required.
+- On a fresh persistent volume (e.g. a new volume or first deploy), the
+  `lifespan` startup hook calls `initialize_all_databases()` and creates all
+  13 tables automatically — no manual setup needed.
 
 ---
 
@@ -245,7 +251,19 @@ but not yet deployed.
   - `APP_ENV=production`
   - `CORS_ORIGINS=https://<your-vercel-domain>`
   - (No secret keys needed for V1 — no external credentials.)
-- **Storage**: deliberately none (no persistent volume). SQLite is ephemeral.
+- **Storage (persistent volume):**
+  - Add a **Volume** to the backend service with:
+    - **Mount path**: `<repo-root>/data` (default Nixpacks repo root is
+      `/app`, so the mount path is `/app/data`). Mount it exactly at the
+      directory that holds `personal_life.db`.
+  - Railway persists this volume across deploys, restarts, and crashes, so the
+    SQLite file survives. The DB path (`APP_ROOT/data/personal_life.db`)
+    resolves to this mounted directory, so no code changes are required.
+  - On a brand-new volume, the app auto-creates all 13 tables on first startup
+    (the `lifespan` hook in `app/api/main.py` → `initialize_all_databases()`).
+  - Keep volume capacity at the minimum (SQLite is a single small file).
+  - Do **not** expose the `data/` directory publicly (no static file serving;
+    the API only reads the DB internally).
 
 ---
 
@@ -339,15 +357,17 @@ Run these before deploying:
 
 - **Code**: Git is the source of truth. Roll back the frontend/backend with a
   `git revert` or redeploy a previous good commit.
-- **Data**: restore from `backups/` (section 8). Because V1 storage is
-  ephemeral, redeploying wipes data — check the backup before/after any
-  redeploy.
+- **Data**: restore from `backups/` (section 8). With the persistent volume,
+  redeploying/restarting preserves data; still verify the backup before/after
+  any redeploy as a safety net.
 
 ---
 
 ## 19. Current V1 limitations
 
-- **Ephemeral storage**: data can be lost on Railway redeploy/restart.
+- **Persistent storage via volume**: data now survives redeploys/restarts on
+  Railway through a persistent volume over `data/` (section 12). Backups remain
+  the safety net — always back up before significant changes.
 - **No auth**: single-user personal app; no user accounts or isolation.
 - **Single machine/person**: not designed for multi-user concurrent access.
 - **`explore` screen**: a leftover Expo starter template screen
@@ -374,5 +394,6 @@ Run these before deploying:
 
 > SIVA OS = Expo (Vercel) talking over HTTPS to FastAPI (Railway), which reads
 > and writes one SQLite file (`data/personal_life.db`). Your *code* lives in
-> Git; your *data* lives in that SQLite file and is backed up to `backups/`.
-> For V1 the cloud database is temporary, so always back it up before shipping.
+> Git; your *data* lives in that SQLite file, persists via the Railway
+> persistent volume, and is backed up to `backups/`. Always back it up before
+> shipping significant changes.

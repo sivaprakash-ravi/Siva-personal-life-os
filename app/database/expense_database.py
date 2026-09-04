@@ -327,20 +327,23 @@ def update_expense(
 ):
     connection = get_connection()
 
+    # Full update: write every column with the provided value so nullable
+    # fields (description, notes, merchant, ...) can be explicitly cleared
+    # back to NULL when editing. The only caller (the Finance edit endpoint)
+    # always supplies complete values.
     connection.execute(
         """
         UPDATE expenses
         SET
-            category = COALESCE(?, category),
-            subcategory = COALESCE(?, subcategory),
-            amount = COALESCE(?, amount),
-            description = COALESCE(?, description),
-            payment_method = COALESCE(?, payment_method),
-            source = COALESCE(?, source),
-            merchant = COALESCE(?, merchant),
-            transaction_reference =
-                COALESCE(?, transaction_reference),
-            notes = COALESCE(?, notes)
+            category = ?,
+            subcategory = ?,
+            amount = ?,
+            description = ?,
+            payment_method = ?,
+            source = ?,
+            merchant = ?,
+            transaction_reference = ?,
+            notes = ?
         WHERE id = ?
         """,
         (
