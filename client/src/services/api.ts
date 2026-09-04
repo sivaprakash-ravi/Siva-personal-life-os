@@ -1,5 +1,4 @@
-const API_BASE_URL = 'http://10.58.227.224:8000';
-
+const API_BASE_URL = 'http://192.168.1.9:8000';
 async function request<T>(
   path: string,
   options?: RequestInit,
