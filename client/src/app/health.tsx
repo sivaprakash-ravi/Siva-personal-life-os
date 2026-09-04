@@ -47,11 +47,11 @@ type HealthRecord = {
 
 const METRICS = [
   { key: 'steps', label: 'Steps', unit: 'steps' },
-  { key: 'water_ml', label: 'Water', unit: 'ml' },
+  { key: 'water', label: 'Water', unit: 'ml' },
   { key: 'sleep_hours', label: 'Sleep', unit: 'hours' },
-  { key: 'weight_kg', label: 'Weight', unit: 'kg' },
+  { key: 'weight', label: 'Weight', unit: 'kg' },
   { key: 'exercise_minutes', label: 'Exercise', unit: 'min' },
-  { key: 'distance_km', label: 'Distance', unit: 'km' },
+  { key: 'distance', label: 'Distance', unit: 'km' },
   { key: 'active_calories', label: 'Active Calories', unit: 'kcal' },
   { key: 'heart_rate', label: 'Heart Rate', unit: 'bpm' },
   {

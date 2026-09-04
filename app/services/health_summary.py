@@ -30,7 +30,15 @@ def get_daily_health_summary(target_date=None):
     }
 
     for record in records:
+        # Normalize legacy stored metric aliases (older app versions stored the
+        # display names) to the canonical backend metric keys in
+        # health_metrics.VALID_METRICS so pre-existing rows still aggregate.
         metric_type = record[2]
+        metric_type = {
+            "water_ml": "water",
+            "weight_kg": "weight",
+            "distance_km": "distance",
+        }.get(metric_type, metric_type)
         value = record[3]
 
         if metric_type == "sleep_hours":
