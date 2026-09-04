@@ -7,6 +7,7 @@ from app.services.checkin_service import (
     edit_checkin,
 )
 from app.services.daily_summary import get_daily_summary
+from app.services.weekly_summary import get_weekly_summary
 
 
 router = APIRouter(
@@ -19,6 +20,12 @@ router = APIRouter(
 def daily_summary():
     create_today_checkins()
     return get_daily_summary()
+
+
+@router.get("/daily/weekly")
+def weekly_daily_summary():
+    create_today_checkins()
+    return get_weekly_summary()
 
 
 @router.get("/daily/checkins")

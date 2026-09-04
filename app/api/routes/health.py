@@ -11,6 +11,7 @@ from app.services.health_service import (
     remove_health_record,
 )
 from app.services.health_summary import get_daily_health_summary
+from app.services.health_overview import get_health_overview
 
 
 router = APIRouter(
@@ -31,6 +32,11 @@ class HealthRecordRequest(BaseModel):
 @router.get("")
 def health_summary():
     return get_daily_health_summary()
+
+
+@router.get("/progress")
+def health_progress():
+    return get_health_overview()
 
 
 @router.get("/records")

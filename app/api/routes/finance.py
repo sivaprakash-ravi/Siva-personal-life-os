@@ -15,6 +15,7 @@ from app.services.expense_service import (
 from app.services.expense_intelligence import (
     get_daily_expense_summary,
     get_monthly_expense_summary,
+    get_category_spending,
 )
 
 from app.services.spending_insights import (
@@ -107,6 +108,13 @@ def monthly_total():
 @router.get("/insights")
 def spending_insights():
     return get_spending_insights()
+
+
+@router.get("/categories")
+def finance_categories():
+    return {
+        "categories": get_category_spending(),
+    }
 
 
 @router.get("/expenses")

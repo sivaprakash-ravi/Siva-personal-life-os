@@ -12,6 +12,9 @@ from app.services.meal_service import (
 from app.services.nutrition_summary import (
     get_daily_nutrition_summary,
 )
+from app.services.nutrition_targets import (
+    get_daily_nutrition_progress,
+)
 
 
 router = APIRouter(
@@ -33,6 +36,11 @@ class MealRequest(BaseModel):
 @router.get("")
 def nutrition_summary():
     return get_daily_nutrition_summary()
+
+
+@router.get("/progress")
+def nutrition_progress():
+    return get_daily_nutrition_progress()
 
 
 @router.get("/meals")
