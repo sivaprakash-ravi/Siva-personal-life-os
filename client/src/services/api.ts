@@ -2,7 +2,7 @@ const DEV_API_FALLBACK = 'http://10.58.227.224:8000';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-const API_BASE_URL = (() => {
+export const API_BASE_URL = (() => {
   const configured = process.env.EXPO_PUBLIC_API_URL;
 
   if (configured) {
@@ -80,6 +80,36 @@ export function undoCheckin(
     {
       method: 'POST',
     },
+  );
+}
+
+/* -------------------------
+   Daily overview (canonical completion)
+------------------------- */
+
+export type OverviewDomainKey = 'daily' | 'health' | 'nutrition' | 'activity';
+
+export interface OverviewDomain {
+  available: boolean;
+  percentage: number | null;
+  note?: string | null;
+  [key: string]: unknown;
+}
+
+export interface DailyOverview {
+  date: string;
+  percentage: number | null;
+  domains: Record<OverviewDomainKey, OverviewDomain>;
+}
+
+export function getDailyOverview(date?: string) {
+  const query =
+    date === undefined
+      ? ''
+      : `?date=${encodeURIComponent(date)}`;
+
+  return request<DailyOverview>(
+    `/api/v1/daily/overview${query}`,
   );
 }
 
@@ -287,4 +317,82 @@ export function getUnified<T>() {
   return request<T>(
     '/api/v1/unified',
   );
+}
+
+/* -------------------------
+   Reports
+------------------------- */
+
+export type ReportType = 'day' | 'week' | 'month';
+
+export interface ReportSummaryDay {
+  date: string;
+  weekday: string;
+  checkin_total: number;
+  checkin_completed: number;
+  overview_percentage: number | null;
+  available_domains: string[];
+  unavailable_domains: string[];
+  [key: string]: unknown;
+}
+
+export interface ReportSummary {
+  report_type: ReportType;
+  reference_date: string;
+  range: {
+    start: string;
+    end: string;
+  };
+  days: ReportSummaryDay[];
+  aggregates: {
+    checkin_completion_rate: number;
+    health_score: number;
+    nutrition_score: number;
+    finance_spend: number;
+  };
+}
+
+export function getReportSummary(
+  reportType: ReportType,
+  date?: string,
+) {
+  const query =
+    `report_type=${encodeURIComponent(reportType)}` +
+    (date === undefined ? '' : `&date=${encodeURIComponent(date)}`);
+
+  return request<ReportSummary>(
+    `/api/v1/reports/summary?${query}`,
+  );
+}
+
+export function reportPdfUrl(
+  reportType: ReportType,
+  date?: string,
+): string {
+  const query =
+    `report_type=${encodeURIComponent(reportType)}` +
+    (date === undefined ? '' : `&date=${encodeURIComponent(date)}`);
+
+  return `${API_BASE_URL}/api/v1/reports/pdf?${query}`;
+}
+
+export async function getReportPdf(
+  reportType: ReportType,
+  date?: string,
+): Promise<Blob> {
+  const response = await fetch(reportPdfUrl(reportType, date), {
+    headers: {
+      Accept: 'application/pdf',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `API ${response.status}: ${errorText}`,
+    );
+  }
+
+  return response.blob();
 }

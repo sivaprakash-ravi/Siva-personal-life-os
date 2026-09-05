@@ -6,10 +6,7 @@ export { AnimatedNumber } from './animated-number';
 export type { AnimatedNumberProps } from './animated-number';
 
 export { CommandCenter } from './command-center';
-export type { CommandCenterProps } from './command-center';
-
-export { DashboardHeader } from './dashboard-header';
-export type { DashboardHeaderProps } from './dashboard-header';
+export type { CommandCenterProps, CommandCenterChip } from './command-center';
 
 export { FinancePanel } from './finance-panel';
 export type { FinancePanelProps, FinanceDailyData } from './finance-panel';

@@ -22,7 +22,8 @@ export type WeeklyDay = {
 
 export type WeeklyChartProps = {
   days: WeeklyDay[];
-  /** Index of the day to emphasize as "today" (last day when omitted). */
+  /** Index of the day to emphasize as "today". Defaults to the last day when
+   * omitted or when the value is -1 (today's date was not found in history). */
   highlightIndex?: number;
 };
 
@@ -38,7 +39,10 @@ function dayLabel(isoDate: string, index: number): string {
 
 /**
  * Compact weekly completion bar chart. Each bar represents one day's
- * completion percentage; bars animate in height for a subtle entrance.
+ * completion percentage; bars animate in height for a subtle entrance. Days
+ * without any scheduled check-ins render as a muted no-data column ("–")
+ * instead of a misleading zero bar, so the historical week reads accurately
+ * from the first day of data.
  */
 export function WeeklyChart({ days, highlightIndex = -1 }: WeeklyChartProps) {
   const theme = useTheme();
@@ -59,6 +63,7 @@ export function WeeklyChart({ days, highlightIndex = -1 }: WeeklyChartProps) {
               key={day.date}
               label={dayLabel(day.date, index)}
               percent={day.completion_rate}
+              hasData={day.total > 0}
               active={isActive}
               toneColor={theme.accent}
               mutedColor={theme.backgroundSelected}
@@ -74,6 +79,7 @@ export function WeeklyChart({ days, highlightIndex = -1 }: WeeklyChartProps) {
 function Bar({
   label,
   percent,
+  hasData,
   active,
   toneColor,
   mutedColor,
@@ -81,6 +87,7 @@ function Bar({
 }: {
   label: string;
   percent: number;
+  hasData: boolean;
   active: boolean;
   toneColor: string;
   mutedColor: string;
@@ -104,30 +111,47 @@ function Bar({
   return (
     <View style={styles.barColumn}>
       <View style={styles.markerArea}>
-        {active ? (
+        {active && hasData ? (
           <View style={[styles.activeDot, { backgroundColor: toneColor }]} />
         ) : null}
       </View>
       <View style={[styles.barTrack, { backgroundColor: mutedColor }]}>
-        <Animated.View
-          style={[
-            styles.barFill,
-            { backgroundColor: fillColor, borderRadius: Radius.sm },
-            active && styles.activeFill,
-            animatedStyle,
-          ]}
-        />
+        {hasData ? (
+          <Animated.View
+            style={[
+              styles.barFill,
+              { backgroundColor: fillColor, borderRadius: Radius.sm },
+              active && styles.activeFill,
+              animatedStyle,
+            ]}
+          />
+        ) : (
+          <View style={[styles.noDataFill, { borderColor: fillMuted }]} />
+        )}
       </View>
-      <ThemedText style={[styles.barLabel, active && { color: toneColor }]}>
+      <ThemedText
+        style={[
+          styles.barLabel,
+          active && hasData ? { color: toneColor } : undefined,
+          !hasData && { opacity: 0.6 },
+        ]}
+      >
         {label}
       </ThemedText>
       <ThemedText
-        style={[styles.barValue, active && { color: toneColor }]}
-        themeColor={active ? undefined : 'textSecondary'}
+        style={[
+          styles.barValue,
+          active && hasData ? { color: toneColor } : undefined,
+        ]}
+        themeColor={hasData ? (active ? undefined : 'textSecondary') : 'textMuted'}
       >
-        {Math.round(percent)}%
+        {hasData ? `${Math.round(percent)}%` : '–'}
       </ThemedText>
-      {active ? <View style={[styles.todayChip, { backgroundColor: `${toneColor}22` }]} /> : null}
+      {active && hasData ? (
+        <View style={[styles.todayChip, { backgroundColor: `${toneColor}22` }]} />
+      ) : (
+        <View style={styles.todayChip} />
+      )}
     </View>
   );
 }
@@ -179,6 +203,14 @@ const styles = StyleSheet.create({
   barFill: {
     width: '100%',
     borderRadius: Radius.sm,
+  },
+  noDataFill: {
+    width: '100%',
+    height: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    marginBottom: Spacing.two,
   },
   barLabel: {
     fontSize: FontSize.tiny,

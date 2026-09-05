@@ -6,10 +6,11 @@ import { BRAND } from '@/constants/brand';
 import { FontSize, FontWeight, Radius, Spacing } from '@/constants/theme';
 
 const tabs = [
-  { label: 'Today', path: '/' },
-  { label: 'Health', path: '/health' },
-  { label: 'Nutrition', path: '/nutrition' },
-  { label: 'Finance', path: '/finance' },
+  { label: 'Today', path: '/', glyph: '⚡' },
+  { label: 'Health', path: '/health', glyph: '💚' },
+  { label: 'Nutrition', path: '/nutrition', glyph: '🔥' },
+  { label: 'Finance', path: '/finance', glyph: '₹' },
+  { label: 'Reports', path: '/reports', glyph: '📄' },
 ] as const;
 
 export default function AppTabs() {
@@ -17,8 +18,8 @@ export default function AppTabs() {
 
   return (
     <View style={styles.root}>
-      {/* Compact premium left sidebar */}
-      <aside style={styles.sidebar} className="siva-nav">
+      {/* Compact premium left sidebar (desktop web) */}
+      <aside style={styles.sidebar} className="siva-nav siva-sidebar">
         <View style={styles.brand}>
           <LogoMark size={34} />
           <View style={styles.brandText}>
@@ -51,8 +52,32 @@ export default function AppTabs() {
         </nav>
       </aside>
 
+      {/* Bottom navigation (mobile web, <= 767px via global.css) */}
+      <nav className="siva-mobile-nav" style={styles.mobileNav}>
+        {tabs.map((tab) => {
+          const active =
+            tab.path === '/' ? pathname === '/' : pathname.startsWith(tab.path);
+
+          return (
+            <Link
+              key={tab.path}
+              href={tab.path}
+              className="siva-nav-item"
+              style={[styles.mobileItem, active && styles.itemActive]}
+            >
+              <Text style={[styles.mobileGlyph, active && styles.mobileGlyphActive]}>
+                {tab.glyph}
+              </Text>
+              <Text style={[styles.mobileLabel, active && styles.itemLabelActive]}>
+                {tab.label}
+              </Text>
+            </Link>
+          );
+        })}
+      </nav>
+
       {/* Main dashboard */}
-      <View style={styles.content}>
+      <View style={styles.content} className="siva-content">
         <Slot />
       </View>
     </View>
@@ -119,6 +144,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
+  },
+  mobileNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  mobileItem: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    borderRadius: Radius.md,
+  },
+  mobileGlyph: {
+    fontSize: FontSize.title - 4,
+    color: '#7F8794',
+    opacity: 0.7,
+  },
+  mobileGlyphActive: {
+    color: '#5B8CFF',
+    opacity: 1,
+  },
+  mobileLabel: {
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.semibold,
+    color: '#7F8794',
   },
   itemMarker: {
     width: 3,

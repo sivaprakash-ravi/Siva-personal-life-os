@@ -1,11 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, type TextStyle } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedProps,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 
 export type AnimatedNumberProps = {
   value: number;
@@ -20,11 +14,17 @@ export type AnimatedNumberProps = {
   style?: TextStyle | TextStyle[];
 };
 
-const AnimatedText = Animated.createAnimatedComponent(Text);
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
 
 /**
- * Counts up to `value` with a subtle easing animation. Used for KPI and hero
- * metrics so values feel alive without being distracting.
+ * Counts up to `value` with a subtle easing animation.
+ *
+ * Rendered with a plain requestAnimationFrame-driven state update instead of
+ * reanimated `animatedProps`, because animated text props are not applied to
+ * `<Text>` on react-native-web (the number would stay blank on web). Drives
+ * identical behaviour on native and web.
  */
 export function AnimatedNumber({
   value,
@@ -34,24 +34,30 @@ export function AnimatedNumber({
   duration = 800,
   style,
 }: AnimatedNumberProps) {
-  const progress = useSharedValue(0);
+  const [display, setDisplay] = useState(0);
 
   useEffect(() => {
-    progress.value = 0;
-    progress.value = withTiming(1, {
-      duration,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [value, duration, progress]);
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = easeOutCubic(progress);
+      setDisplay(Math.round(eased * value * 100) / 100);
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+      }
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value, duration]);
 
-  const animatedProps = useAnimatedProps(() => {
-    const current = Math.round(progress.value * value * 100) / 100;
-    return {
-      text: `${prefix}${current.toFixed(decimals)}${suffix}`,
-    } as any;
-  });
-
-  return <AnimatedText animatedProps={animatedProps} style={style} />;
+  return (
+    <Text style={style} allowFontScaling={false}>
+      {prefix}
+      {display.toFixed(decimals)}
+      {suffix}
+    </Text>
+  );
 }
 
 export const styles = StyleSheet.create({});

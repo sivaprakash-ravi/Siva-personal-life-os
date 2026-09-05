@@ -8,6 +8,7 @@ import {
   StyleSheet,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -105,7 +106,9 @@ export function HeroCarousel({
 }: HeroCarouselProps) {
   const theme = useTheme();
   const isWeb = Platform.OS === 'web';
-  const aspect = isWeb ? aspectWeb : aspectMobile;
+  const { width: viewportWidth } = useWindowDimensions();
+  const isMobileViewport = isWeb ? viewportWidth < 768 : true;
+  const aspect = isMobileViewport ? aspectMobile : aspectWeb;
   const [width, setWidth] = useState(0);
   const [interacting, setInteracting] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -121,7 +124,7 @@ export function HeroCarousel({
   const slideHeight = derivedHeight;
 
   const resolveSource = (slide: HeroSlide) =>
-    (isWeb ? slide.imageWeb : slide.imageMobile) ?? slide.image;
+    (isMobileViewport ? slide.imageMobile : slide.imageWeb) ?? slide.image;
 
   const advanceTo = (target: number) => {
     const wrapped = ((Math.round(target) % safe) + safe) % safe;
@@ -278,7 +281,10 @@ function Slide({
       {source ? (
         <Image
           source={source}
-          style={StyleSheet.absoluteFill}
+          style={[
+            StyleSheet.absoluteFill,
+            { width: '100%', height: '100%' },
+          ]}
           resizeMode="cover"
           accessibilityIgnoresInvertColors
         />
