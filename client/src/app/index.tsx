@@ -21,6 +21,7 @@ import {
   QuickActions,
   SectionPanel,
   WeeklySummaryPanel,
+  type CommandCenterChip,
   type WeeklyDay,
 } from '@/components/dashboard';
 import {
@@ -36,7 +37,16 @@ import {
 import { FontSize, FontWeight, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
+  availableDomainKeys,
+  legacyCheckinCompletion,
+  normalizeOverview,
+  OVERVIEW_DOMAIN_LABELS,
+  OVERVIEW_DOMAIN_ORDER,
+  overallCompletion,
+} from '@/utils/overall-completion';
+import {
   completeCheckin,
+  getDailyOverview,
   getDailySummary,
   getFinanceCategories,
   getFinanceDaily,
@@ -46,6 +56,7 @@ import {
   getTodayCheckins,
   getWeeklyDailySummary,
   undoCheckin,
+  type DailyOverview,
 } from '../services/api';
 
 /* ---------------------------------------------------------------------------
@@ -173,6 +184,8 @@ export default function DashboardScreen() {
 
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [checkins, setCheckins] = useState<CheckIn[]>([]);
+  const [overview, setOverview] = useState<DailyOverview | null>(null);
+  const [overviewFailed, setOverviewFailed] = useState(false);
   const [weekly, setWeekly] = useState<WeeklySummary | null>(null);
   const [health, setHealth] = useState<HealthProgress | null>(null);
   const [nutrition, setNutrition] = useState<NutritionProgress | null>(null);
@@ -214,6 +227,19 @@ export default function DashboardScreen() {
       setDailyError(true);
     } finally {
       setLoadingDaily(false);
+    }
+
+    // Canonical overview is loaded independently so a failure (e.g. the
+    // endpoint not deployed yet) degrades to the check-in fallback instead
+    // of blanking the whole dashboard.
+    try {
+      const data = await getDailyOverview();
+      setOverview(data);
+      setOverviewFailed(false);
+    } catch (error) {
+      console.error('Dashboard overview:', error);
+      setOverview(null);
+      setOverviewFailed(true);
     }
   }, []);
 
@@ -325,7 +351,65 @@ export default function DashboardScreen() {
     }
   };
 
-  const completionRate = summary?.completion_rate ?? 0;
+  const normalizedOverview = normalizeOverview(overview);
+  const canonicalRate = overallCompletion(normalizedOverview);
+  const legacyRate = legacyCheckinCompletion(summary);
+  const domainKeys = availableDomainKeys(normalizedOverview);
+
+  // Fall back to the legacy check-in figure only when the canonical overview
+  // is unreachable; an overview that loaded but has no data stays honest
+  // (null → "—", "No data yet").
+  const hasCanonical =
+    normalizedOverview !== null &&
+    !overviewFailed &&
+    domainKeys.length > 0 &&
+    canonicalRate !== null;
+
+  const commandCompletion: number | null = hasCanonical
+    ? canonicalRate
+    : overviewFailed
+      ? legacyRate
+      : null;
+  const commandChips: CommandCenterChip[] = normalizedOverview
+    ? OVERVIEW_DOMAIN_ORDER.map((key) => {
+        const domain = normalizedOverview.domains[key];
+        const percentage = domain?.percentage ?? null;
+        return {
+          label: OVERVIEW_DOMAIN_LABELS[key],
+          value: percentage === null ? '—' : `${Math.round(percentage)}%`,
+          tone:
+            percentage === null
+              ? 'muted'
+              : percentage >= 75
+                ? 'success'
+                : percentage > 0
+                  ? 'warning'
+                  : 'muted',
+        };
+      })
+    : summary
+      ? [
+          { label: 'Tasks done', value: `${summary.completed}`, tone: 'success' },
+          { label: 'Pending', value: `${summary.pending}`, tone: 'warning' },
+          { label: 'Missed', value: `${summary.missed}`, tone: 'danger' },
+          { label: 'Total', value: `${summary.total}`, tone: 'accent' },
+        ]
+      : [];
+
+  const tasksContext = summary?.total
+    ? `${summary.completed}/${summary.total} tasks done`
+    : undefined;
+  const noDataContext =
+    normalizedOverview && !hasCanonical
+      ? 'No data recorded yet today.'
+      : undefined;
+  const commandNote = tasksContext ?? noDataContext;
+  const glanceDailyContext = normalizedOverview
+    ? hasCanonical
+      ? tasksContext
+      : noDataContext
+    : tasksContext;
+
   const healthProgress = health?.progress;
   const categoriesList = categories?.categories ?? [];
   const pendingCheckin = checkins.find((c) => c.status === 'pending');
@@ -372,12 +456,9 @@ export default function DashboardScreen() {
             ) : (
               <CommandCenter
                 date={summary?.date}
-                connected={!dailyError}
-                completionRate={Math.round(completionRate)}
-                completed={summary?.completed ?? 0}
-                pending={summary?.pending ?? 0}
-                missed={summary?.missed ?? 0}
-                total={summary?.total ?? 0}
+                completionRate={commandCompletion}
+                chips={commandChips}
+                note={commandNote}
               />
             )}
           </View>
@@ -393,13 +474,9 @@ export default function DashboardScreen() {
               <GlanceCard
                 label="Daily"
                 glyph="⚡"
-                value={`${Math.round(completionRate)}%`}
-                context={
-                  summary?.total
-                    ? `${summary.completed}/${summary.total} tasks done`
-                    : 'No tasks'
-                }
-                progress={completionRate}
+                value={commandCompletion !== null ? `${Math.round(commandCompletion)}%` : '—'}
+                context={glanceDailyContext}
+                progress={commandCompletion ?? 0}
                 tone="info"
               />
               <GlanceCard

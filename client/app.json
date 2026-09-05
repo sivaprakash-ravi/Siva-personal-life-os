@@ -34,7 +34,8 @@
           "resizeMode": "cover"
         }
       ],
-      "./plugins/with-siva-launch-screen"
+      "./plugins/with-siva-launch-screen",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

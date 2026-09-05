@@ -50,10 +50,7 @@ export function WeeklySummaryPanel({ data, todayDate }: WeeklySummaryPanelProps)
   const days = data.daily_summaries ?? [];
 
   const highlightIndex = todayDate
-    ? Math.max(
-        0,
-        days.findIndex((d) => d.date === todayDate),
-      )
+    ? days.findIndex((d) => d.date === todayDate)
     : -1;
 
   const stats = [
@@ -76,7 +73,7 @@ export function WeeklySummaryPanel({ data, todayDate }: WeeklySummaryPanelProps)
       contentStyle={styles.content}
     >
       {days.length > 0 ? (
-        <WeeklyChart days={days} highlightIndex={highlightIndex >= 0 ? highlightIndex : -1} />
+        <WeeklyChart days={days} highlightIndex={highlightIndex} />
       ) : null}
 
       <View style={[styles.statsRow, { borderTopColor: theme.border }]}>

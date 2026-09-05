@@ -80,6 +80,16 @@ export default function AppTabs() {
       />
 
       <Tabs.Screen
+        name="reports"
+        options={{
+          title: 'Reports',
+          tabBarIcon: ({ color, focused }) => (
+            <TabGlyph glyph="📄" color={color} focused={focused ?? false} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="explore"
         options={{
           href: null,

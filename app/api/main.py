@@ -5,10 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.daily import router as daily_router
+from app.api.routes.finance import router as finance_router
 from app.api.routes.health import router as health_router
 from app.api.routes.nutrition import router as nutrition_router
-from app.api.routes.finance import router as finance_router
 from app.api.routes.recurring import router as recurring_router
+from app.api.routes.reports import router as reports_router
 from app.api.routes.unified import router as unified_router
 from app.main import initialize_all_databases
 
@@ -61,6 +62,7 @@ app.include_router(health_router)
 app.include_router(nutrition_router)
 app.include_router(finance_router)
 app.include_router(recurring_router)
+app.include_router(reports_router)
 app.include_router(unified_router)
 
 
