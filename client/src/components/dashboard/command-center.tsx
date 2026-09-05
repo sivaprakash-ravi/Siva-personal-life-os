@@ -172,7 +172,7 @@ export function CommandCenter({
           <View style={styles.figureValueRow}>
             {hasData ? (
               <>
-                <AnimatedNumber value={clamped} style={styles.figureValue} />
+                <AnimatedNumber value={clamped} style={[styles.figureValue, { color: theme.text }]} />
                 <ThemedText style={[styles.figureUnit, { color: theme.accent }]}>%</ThemedText>
               </>
             ) : (

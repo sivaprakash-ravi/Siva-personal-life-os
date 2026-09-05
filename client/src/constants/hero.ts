@@ -53,6 +53,8 @@ export const HERO_SLIDES: HeroSlide[] = [
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     imageWeb: require('../../assets/dashboard/hero/family-beach.jpg'),
     // eslint-disable-next-line @typescript-eslint/no-require-imports
+    imageMobile: require('../../assets/dashboard/hero/family-beach-mobile.jpg'),
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     image: require('../../assets/dashboard/hero/family-beach.jpg'),
     eyebrow: 'SIVA OS',
     title: 'For The Ones Who Matter.',
