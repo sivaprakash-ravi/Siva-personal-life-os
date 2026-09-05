@@ -26,3 +26,32 @@ body,
 #root {
   height: 100%;
 }
+
+/* ---- Mobile web shell (<= 767px): bottom navigation replaces the
+       desktop sidebar. Both navs are rendered and toggled in CSS so the
+       static export stays consistent across viewports. ---- */
+.siva-mobile-nav {
+  display: none !important;
+}
+
+@media (max-width: 767px) {
+  .siva-sidebar {
+    display: none !important;
+  }
+  .siva-mobile-nav {
+    display: flex !important;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+    background-color: #12151a;
+    border-top: 1px solid #1b202b;
+    z-index: 1000;
+  }
+  .siva-content {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}

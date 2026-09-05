@@ -1,21 +1,36 @@
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { AnimatedNumber } from '@/components/dashboard/animated-number';
-import { StatusBadge } from '@/components/ui/dashboard/status-badge';
-import type { StatusTone } from '@/components/ui/dashboard/types';
 import { ThemedText } from '@/components/themed-text';
 import { FontSize, FontWeight, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
+export type CommandCenterChip = {
+  label: string;
+  value: string;
+  tone: 'success' | 'warning' | 'danger' | 'accent' | 'muted' | 'neutral';
+};
+
 export type CommandCenterProps = {
   date?: string;
   name?: string;
-  connected: boolean;
-  completionRate: number;
-  completed: number;
-  pending: number;
-  missed: number;
-  total: number;
+  /**
+   * Canonical 0-100 Today's Completion (see `utils/overall-completion`).
+   * `null` means no data recorded yet today — the UI shows an honest
+   * "No data yet" state instead of a fake 0.
+   */
+  completionRate: number | null;
+  /** Breakdown chips (e.g. Daily/Health/Nutrition/Activity domain scores). */
+  chips?: CommandCenterChip[];
+  /** Small honest context line (e.g. "2 of 4 tasks done"). */
+  note?: string;
 };
 
 function formatDate(isoDate?: string): string {
@@ -38,30 +53,86 @@ function hourGreeting(): string {
   return 'Good night';
 }
 
+/** Tick positions (%) for the subtle 25/50/75 gauge marks. */
+const GAUGE_TICKS = [25, 50, 75] as const;
+
+/** Rounded figure used for the % display. */
+function roundRate(value: number): number {
+  return Math.round(Math.min(Math.max(Number.isFinite(value) ? value : 0, 0), 100));
+}
+
+function toneColor(
+  tone: CommandCenterChip['tone'],
+  theme: ReturnType<typeof useTheme>,
+) {
+  switch (tone) {
+    case 'success':
+      return theme.success;
+    case 'warning':
+      return theme.warning;
+    case 'danger':
+      return theme.danger;
+    case 'accent':
+      return theme.accent;
+    case 'muted':
+      return theme.textMuted;
+    default:
+      return theme.textSecondary;
+  }
+}
+
 /**
  * "Today's Command Center" — the premium banner directly beneath the hero
- * carousel. Renders the greeting, date and connection state, a prominent
- * animated completion figure, a wide completion bar and the day's breakdown
- * (completed / pending / missed / total).
+ * carousel. Renders the greeting/date, a prominent animated completion figure,
+ * a premium graduated gauge with tick marks and a travel marker, and the day's
+ * domain breakdown chips.
+ *
+ * Connection state is intentionally NOT rendered here — the single "Connected"
+ * indicator lives in `BrandHeader` so it never appears twice on screen.
  */
 export function CommandCenter({
   date,
   name = 'Siva',
-  connected,
   completionRate,
-  completed,
-  pending,
-  missed,
-  total,
+  chips = [],
+  note,
 }: CommandCenterProps) {
   const theme = useTheme();
-  const connectionTone: StatusTone = connected ? 'success' : 'danger';
-  const breakdown: { label: string; value: number; color: string }[] = [
-    { label: 'Completed', value: completed, color: theme.success },
-    { label: 'Pending', value: pending, color: theme.warning },
-    { label: 'Missed', value: missed, color: theme.danger },
-    { label: 'Total', value: total, color: theme.accent },
-  ];
+  const hasData = completionRate !== null && completionRate !== undefined;
+  const clamped = hasData ? roundRate(completionRate!) : 0;
+
+  const status = !hasData
+    ? 'No data yet'
+    : clamped >= 100
+      ? 'Perfect day'
+      : clamped >= 75
+        ? 'On track'
+        : clamped > 0
+          ? 'In progress'
+          : 'Not started';
+  const statusColor = !hasData
+    ? theme.textMuted
+    : clamped >= 100 || clamped >= 75
+      ? theme.success
+      : clamped > 0
+        ? theme.warning
+        : theme.textMuted;
+
+  const fill = useSharedValue(0);
+  useEffect(() => {
+    fill.value = withTiming(hasData ? clamped : 0, {
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [clamped, hasData, fill]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${Math.max(fill.value, 0)}%`,
+  }));
+
+  const markerStyle = useAnimatedStyle(() => ({
+    left: `${Math.max(fill.value, 0)}%`,
+  }));
 
   return (
     <View
@@ -77,7 +148,7 @@ export function CommandCenter({
         ]}
       />
 
-      {/* Greeting + connection */}
+      {/* Greeting */}
       <View style={styles.topRow}>
         <View style={styles.greeting}>
           <ThemedText style={styles.greetingLine} themeColor="textSecondary">
@@ -87,15 +158,26 @@ export function CommandCenter({
             {hourGreeting()}, {name}
           </ThemedText>
         </View>
-        <StatusBadge label={connected ? 'Connected' : 'Offline'} tone={connectionTone} />
+        <View style={styles.statusChip}>
+          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+          <ThemedText style={[styles.statusText, { color: statusColor }]}>
+            {status}
+          </ThemedText>
+        </View>
       </View>
 
       {/* Prominent completion figure */}
       <View style={styles.figureRow}>
         <View style={styles.figure}>
           <View style={styles.figureValueRow}>
-            <AnimatedNumber value={Math.round(completionRate)} style={styles.figureValue} />
-            <ThemedText style={[styles.figureUnit, { color: theme.accent }]}>%</ThemedText>
+            {hasData ? (
+              <>
+                <AnimatedNumber value={clamped} style={styles.figureValue} />
+                <ThemedText style={[styles.figureUnit, { color: theme.accent }]}>%</ThemedText>
+              </>
+            ) : (
+              <ThemedText style={styles.figureNull}>—</ThemedText>
+            )}
           </View>
           <ThemedText style={styles.figureLabel} themeColor="textMuted">
             TODAY'S COMPLETION
@@ -103,24 +185,42 @@ export function CommandCenter({
         </View>
       </View>
 
+      {note ? (
+        <ThemedText style={styles.note} themeColor="textMuted">
+          {note}
+        </ThemedText>
+      ) : null}
+
+      {/* Premium graduated gauge */}
       <View style={[styles.barWrap, { backgroundColor: theme.backgroundSelected }]}>
-        <View
+        {GAUGE_TICKS.map((tick) => (
+          <View
+            key={tick}
+            pointerEvents="none"
+            style={[styles.barTick, { left: `${tick}%`, backgroundColor: theme.border }]}
+          />
+        ))}
+        <Animated.View
           style={[
             styles.barFill,
-            { width: `${completionRate}%`, backgroundColor: theme.accent },
+            { backgroundColor: hasData && clamped >= 100 ? theme.success : theme.accent },
+            fillStyle,
           ]}
         />
+        <Animated.View style={[styles.fillMarker, markerStyle]}>
+          <View style={[styles.fillMarkerInner, { backgroundColor: '#FFFFFF', borderColor: theme.accent }]} />
+        </Animated.View>
       </View>
 
-      {/* Breakdown chips */}
+      {/* Domain breakdown chips */}
       <View style={styles.breakdown}>
-        {breakdown.map((b) => (
-          <View key={b.label} style={styles.chip}>
-            <View style={[styles.chipDot, { backgroundColor: b.color }]} />
+        {chips.map((chip) => (
+          <View key={chip.label} style={styles.chip}>
+            <View style={[styles.chipDot, { backgroundColor: toneColor(chip.tone, theme) }]} />
             <View>
-              <ThemedText style={styles.chipValue}>{b.value.toLocaleString()}</ThemedText>
+              <ThemedText style={styles.chipValue}>{chip.value}</ThemedText>
               <ThemedText style={styles.chipLabel} themeColor="textMuted">
-                {b.label}
+                {chip.label}
               </ThemedText>
             </View>
           </View>
@@ -166,6 +266,28 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.bold,
     marginTop: Spacing.one,
   },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.25)',
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.two + Spacing.half,
+    paddingVertical: Spacing.one,
+    marginTop: Spacing.half,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: Radius.full,
+  },
+  statusText: {
+    fontSize: FontSize.caption,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   figureRow: {
     marginTop: Spacing.four - Spacing.half,
   },
@@ -184,6 +306,13 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
     lineHeight: 60,
   },
+  figureNull: {
+    fontSize: 56,
+    fontWeight: FontWeight.extrabold,
+    letterSpacing: -2,
+    lineHeight: 60,
+    color: '#9BA1A6',
+  },
   figureUnit: {
     fontSize: FontSize.title,
     fontWeight: FontWeight.extrabold,
@@ -197,15 +326,43 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginBottom: Spacing.two,
   },
+  note: {
+    fontSize: FontSize.small,
+    fontWeight: FontWeight.medium,
+    marginTop: Spacing.two,
+  },
   barWrap: {
-    height: 10,
+    height: 14,
     borderRadius: Radius.full,
     overflow: 'hidden',
     marginTop: Spacing.four - Spacing.half,
+    position: 'relative',
+  },
+  barTick: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    opacity: 0.6,
   },
   barFill: {
     height: '100%',
     borderRadius: Radius.full,
+  },
+  fillMarker: {
+    position: 'absolute',
+    top: -4,
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ translateX: -11 }],
+  },
+  fillMarkerInner: {
+    width: 10,
+    height: 10,
+    borderRadius: Radius.full,
+    borderWidth: 2,
   },
   breakdown: {
     flexDirection: 'row',
