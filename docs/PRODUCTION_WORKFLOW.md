@@ -226,14 +226,14 @@ npm run web        # or: npx expo start --web
 
 1. Back up the database (`backups/`).
 2. Run the validation checks (see section 17).
-3. Deploy the backend to Railway.
-4. Deploy the frontend to Vercel, pointing `EXPO_PUBLIC_API_URL` at the
-   Railway URL.
+3. Promote code to `main` (see section 22 — release workflow) and push.
+4. Railway and Vercel deploy from `main` (auto or manual; see section 23).
 5. Set the backend `CORS_ORIGINS` to the Vercel origin.
 6. Verify `/health` responds and the app loads end to end.
 
-Do **not** deploy until you (Siva) explicitly ask. This repository is prepared
-but not yet deployed.
+Production is live; `main` is the production source. Development happens on
+other branches and is promoted to `main` only after validation (see sections
+22-25).
 
 ---
 
@@ -383,8 +383,10 @@ Run these before deploying:
 - **Frontend can't reach API**: check `EXPO_PUBLIC_API_URL` is set for the
   active build. In development it falls back to the LAN server; in production
   it fails fast if unset.
-- **Data disappeared after redeploy**: expected for V1 (ephemeral storage).
-  Restore from `backups/`.
+- **Data disappeared after redeploy**: should not happen with the persistent
+  volume (section 12). If data is missing, the volume is not mounted at
+  `/app/data` for that deploy, or the service lost the volume — check the
+  volume mount and restore from `backups/`.
 - **Missing table errors**: ensure `app/main.py` `initialize_all_databases()`
   ran on startup; it creates all tables.
 
@@ -397,3 +399,148 @@ Run these before deploying:
 > Git; your *data* lives in that SQLite file, persists via the Railway
 > persistent volume, and is backed up to `backups/`. Always back it up before
 > shipping significant changes.
+
+---
+
+## 22. Release workflow (staging -> production)
+
+One rule keeps production safe: **`main` is sacred.** Everything lands on
+`main` only after validation, and every thing that lands on `main` is
+versioned.
+
+Branch strategy (minimal, two long-lived branches):
+
+```
+feature/<name>   ------>   develop (staging/integration)
+                                |
+                                v  test + validate
+                          main (production)  ->  deploy  ->  tag vX.Y.Z
+```
+
+- `main` — production. Auto-deploys to Railway (backend) and Vercel
+  (frontend). Only promotion merges and tagged releases land here.
+- `develop` — integration/staging trunk. Branches merge here first and the
+  combined result is validated before reaching `main`.
+- `feature/<name>` — short-lived work branches off `develop`. Tiny hotfixes may
+  branch off `main` directly, but still go through validation before merge.
+
+Desired workflow restated as a checklist:
+
+1. Start from `develop`, create `feature/<name>`.
+2. Develop + commit locally (do not commit data: `*.db`, `backups/`, `.env`
+   are ignored).
+3. Push the branch, open a PR/merge into `develop`.
+4. Validate on staging (section 23) + run the section 17 checks.
+5. Merge `develop` into `main`, push.
+6. Deploys to Railway and Vercel happen (auto or manual — see section 23).
+7. Smoke-test production.
+8. Tag the release (section 24) and record it.
+
+Semantic versioning:
+
+- Format `MAJOR.MINOR.PATCH` (e.g. `v1.0.0`, `v1.1.0`, `v1.0.1`).
+  `client/app.json` `version` should mirror the current `v` number.
+- `PATCH` — bug fixes that keep behavior/API compatible (e.g. the finance
+  category fix, the water metric fix). No schema/API change.
+- `MINOR` — backward-compatible new features or additive API endpoints.
+- `MAJOR` — breaking API/UI/schema changes.
+- Tags: annotated tags on `main` after the release is live:
+  `git tag -a v1.0.1 -m "Release v1.0.1"; git push origin v1.0.1`.
+  Optionally create a matching GitHub Release with notes.
+
+---
+
+## 23. Current production setup and staging arrangement
+
+Current production (what is live today):
+
+- **GitHub**: `origin/main` is the production source of truth
+  (`https://github.com/sivaprakash-ravi/personal-life-os`). Railway and Vercel
+  watch this branch.
+- **Vercel (frontend)**: Expo Web static export from `client/`, build output
+  `dist`, with `EXPO_PUBLIC_API_URL` pointing at the Railway backend URL.
+- **Railway (backend)**: service from the repo root, start command
+  `uvicorn app.api.main:app --host 0.0.0.0 --port "$PORT"`, env `APP_ENV`,
+  `CORS_ORIGINS`, and the **persistent volume mounted at `/app/data`** holding
+  `personal_life.db`. This single production volume/DB must never be shared
+  with or wiped by staging.
+
+Safest practical staging (recommended, minimal):
+
+- **Frontend staging = Vercel Preview deployments.** Every PR automatically
+  gets a preview URL, so the web frontend can be exercised before anything
+  touches `main`. No extra config.
+- **Backend staging = one separate Railway service** connected to `develop`:
+  - New service, same start command and `requirements.txt` build.
+  - **Its own volume** mounted at `/app/data` (a *second, separate* volume —
+    never the production one). Production volume and data are untouched.
+  - Env: `APP_ENV=staging` (or `development`), `CORS_ORIGINS` set to the Vercel
+    preview origin.
+  - Point a staging frontend build (`EXPO_PUBLIC_API_URL`) at the staging
+    backend URL.
+- Lighter alternative when not testing backend changes: validate locally
+  (`uvicorn app.api.main:app` + `npm run web`) and rely on Vercel preview for
+  frontend-only changes. This needs no second backend at all.
+- Staging data is throwaway: it is a separate volume and can be reset freely.
+  Production data is only ever touched by production deploys.
+
+---
+
+## 24. Rollback: code vs database
+
+Separate the two. **A code rollback never touches data, and a database
+rollback never touches code.**
+
+Code rollback (return to the previous known-good application version):
+
+- Preferred: `git revert` the bad commit/merge on `main` and push — Railway
+  and Vercel redeploy the reverted tree. Same history stays intact.
+  ```
+  git checkout main && git pull
+  git revert --no-edit <bad-sha>       # or <merge-sha> for a merge
+  git push origin main
+  ```
+- Alternative: in Railway/Vercel, "Redeploy previous deployment" to the last
+  known-good commit/tag.
+- Tags make this fast: `v1.0.0` is the previous good released version; you can
+  revert to exactly that point.
+
+Database rollback (restore data only):
+
+- Only needed if data was corrupted/lost or a shipped schema/init change made
+  the DB incompatible. Restore from `backups/` using section 8.
+- Steps: stop the backend, copy the current DB aside, restore the `.db`/dump,
+  restart. Data and code are independent: you may revert code alone, restore
+  data alone, or both.
+
+Backup before risky changes:
+
+- Before any promotion that touches schema, table init, or data logic, run the
+  section 7 backup (binary `.db` + SQL dump) into `backups/` (git-ignored).
+- For maximum safety on a database/schema change, also download a snapshot of
+  the production DB (Railway volume) and store it with a dated name before
+  deploying.
+
+Note: reverting a **schema change** requires restoring the DB *and* reverting
+code to the version that reads the old schema — do both together.
+
+---
+
+## 25. Promotion runbook (fast path)
+
+Every release, in order:
+
+1. `git fetch origin && git status` — clean tree, on `main`.
+2. Back up production data (section 7 + section 24 note).
+3. Validate: section 17 checklist (tsc, py_compile, expo export, fresh-DB init,
+   no secrets, CORS, `job-agent/` untouched).
+4. Merge the fetched/validated changes:
+   ```
+   git checkout main && git pull origin main
+   git merge --no-ff develop && git push origin main
+   ```
+   (or merge the approved PR to `main` on GitHub).
+5. Wait for Railway + Vercel deploys; hit `GET /health` and the dashboard;
+   add/read one record end to end.
+6. Tag: `git tag -a v<NEW> -m "Release v<NEW>"; git push origin v<NEW>`.
+7. Confirm production shows the expected version and data persisted.
